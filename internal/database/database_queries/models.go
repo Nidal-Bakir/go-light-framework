@@ -7,6 +7,7 @@ package database_queries
 import (
 	"net/netip"
 
+	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5/pgtype"
 )
 
@@ -269,6 +270,16 @@ type OidcLoginIdentity struct {
 	CreatedAt       pgtype.Timestamptz `json:"created_at"`
 	UpdatedAt       pgtype.Timestamptz `json:"updated_at"`
 	DeletedAt       pgtype.Timestamptz `json:"deleted_at"`
+}
+
+type OtpChallenge struct {
+	ID        uuid.UUID          `json:"id"`
+	OtpHash   string             `json:"otp_hash"`
+	Channel   string             `json:"channel"`
+	Attempts  pgtype.Int4        `json:"attempts"`
+	CreatedAt pgtype.Timestamptz `json:"created_at"`
+	UpdatedAt pgtype.Timestamptz `json:"updated_at"`
+	ExpiresAt pgtype.Timestamptz `json:"expires_at"`
 }
 
 type PasswordLoginIdentity struct {

@@ -49,7 +49,7 @@ func Auth(authRepo auth.Repository) func(http.Handler) http.HandlerFunc {
 				return
 			}
 
-			if _, err := authRepo.VerifyAuthToken(token); err != nil {
+			if _, err := authRepo.VerifyLoginToken(token); err != nil {
 				if appenv.IsStagOrLocal() {
 					zlog.Error().Err(err).Msg("Error from jwt verify function")
 				}
@@ -127,7 +127,7 @@ func Installation(authRepo auth.Repository) func(http.Handler) http.HandlerFunc 
 				return
 			}
 
-			if _, err := authRepo.VerifyTokenForInstallation(installationToken); err != nil {
+			if _, err := authRepo.VerifyInstallationToken(installationToken); err != nil {
 				if appenv.IsStagOrLocal() {
 					zlog.Error().Err(err).Msg("Error from jwt verify function")
 				}

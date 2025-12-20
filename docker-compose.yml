@@ -1,3 +1,5 @@
+name: go-light-framework
+
 services:
   psql:
     build: ./docker/postgres
@@ -11,6 +13,8 @@ services:
       - "${DB_PORT}:5432"
     volumes:
       - psql_volume:/var/lib/postgresql/data
+    networks:
+      - app-network
 
   pgadmin:
     build: ./docker/pgadmin
@@ -21,6 +25,8 @@ services:
       PGADMIN_DEFAULT_PASSWORD: ${PGADMIN_DEFAULT_PASSWORD}
     ports:
       - "7894:80"
+    networks:
+      - app-network
 
   redisinsight:
     build: ./docker/redisinsight
@@ -28,6 +34,8 @@ services:
     restart: always
     ports:
       - "5540:5540"
+    networks:
+      - app-network
 
   redis:
     build: ./docker/redis
@@ -36,7 +44,14 @@ services:
       - "${REDIS_PORT}:6379"
     volumes:
       - redis_volume:/data
+    networks:
+      - app-network
 
 volumes:
   psql_volume:
   redis_volume:
+
+networks:
+  app-network:
+    name: go-light-framework
+    driver: bridge

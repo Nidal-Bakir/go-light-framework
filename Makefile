@@ -19,13 +19,17 @@ docker-up:
 docker-up-build:
 	@sudo docker compose up	--build
 
+# Shutdown the development containers
+docker-down:
+	@sudo docker compose down
+
 # Create and build the development docker containers
 docker-dev-up-build:
 	@sudo docker compose --profile dev up --build
 
 # Shutdown the containers
-docker-down:
-	@sudo docker compose down
+docker-dev-down:
+	@sudo docker compose --profile dev down
 
 # Test the application
 test:

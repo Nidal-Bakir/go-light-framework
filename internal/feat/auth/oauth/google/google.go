@@ -5,6 +5,7 @@ import (
 	"os"
 	"time"
 
+	"github.com/Nidal-Bakir/go-todo-backend/internal/utils/email"
 	"golang.org/x/oauth2"
 	"golang.org/x/oauth2/google"
 	"google.golang.org/api/idtoken"
@@ -93,12 +94,12 @@ func ValidateIdToken(ctx context.Context, idToken string) (*GoogleOidcIdTokenCla
 }
 
 type GoogleOidcIdTokenClaims struct {
-	Sub        string `json:"sub"`
-	Email      string `json:"email"`
-	Name       string `json:"name"`
-	FamilyName string `json:"family_name"`
-	GivenName  string `json:"given_name"`
-	Picture    string `json:"picture"`
+	Sub        string       `json:"sub"`
+	Email      *email.Email `json:"email"`
+	Name       string       `json:"name"`
+	FamilyName string       `json:"family_name"`
+	GivenName  string       `json:"given_name"`
+	Picture    string       `json:"picture"`
 
 	Issuer   string    `json:"iss"`
 	Audience string    `json:"aud"`
@@ -124,7 +125,7 @@ func newGoogleOidcIdTokenClaimsFromIdTokenPayload(payload *idtoken.Payload) *Goo
 	c.IssuedAt = time.Unix(payload.IssuedAt, 0)
 
 	c.Sub = safeConv(payload.Claims["sub"])
-	c.Email = safeConv(payload.Claims["email"])
+	c.Email = email.New(safeConv(payload.Claims["email"]))
 	c.Name = safeConv(payload.Claims["name"])
 	c.FamilyName = safeConv(payload.Claims["family_name"])
 	c.GivenName = safeConv(payload.Claims["given_name"])

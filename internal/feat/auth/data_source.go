@@ -11,6 +11,8 @@ import (
 	"github.com/Nidal-Bakir/go-todo-backend/internal/database"
 	"github.com/Nidal-Bakir/go-todo-backend/internal/database/database_queries"
 	dbutils "github.com/Nidal-Bakir/go-todo-backend/internal/utils/db_utils"
+	"github.com/Nidal-Bakir/go-todo-backend/internal/utils/email"
+	"github.com/Nidal-Bakir/go-todo-backend/internal/utils/phonenumber"
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgtype"
@@ -41,9 +43,9 @@ type DataSource interface {
 	GetAllPasswordLoginIdentitiesForUser(ctx context.Context, userId int32) ([]database_queries.LoginIdentityGetAllPasswordLoginIdentitiesByUserIdRow, error)
 	GetAllLoginIdentitiesForUser(ctx context.Context, userId int32) ([]database_queries.LoginIdentityGetAllByUserIdRow, error)
 
-	IsEmailUsedInPasswordLoginIdentity(ctx context.Context, email string) (bool, error)
-	IsPhoneUsedInPasswordLoginIdentity(ctx context.Context, phone string) (bool, error)
-	IsEmailUsedInOidcLoginIdentity(ctx context.Context, email string) (bool, error)
+	IsEmailUsedInPasswordLoginIdentity(ctx context.Context, email *email.Email) (bool, error)
+	IsPhoneUsedInPasswordLoginIdentity(ctx context.Context, phone *phonenumber.PhoneNumber) (bool, error)
+	IsEmailUsedInOidcLoginIdentity(ctx context.Context, email *email.Email) (bool, error)
 
 	// Create ---
 
@@ -114,7 +116,6 @@ func (ds dataSourceImpl) StoreUserInTempCache(ctx context.Context, tUser TempPas
 	pip.HSet(ctx, key, tUser.ToMap())
 	pip.Expire(ctx, key, expirationForTempUser)
 	resultArray, err := pip.Exec(ctx)
-
 	if err != nil {
 		return err
 	}
@@ -150,6 +151,14 @@ func (ds dataSourceImpl) DeleteUserFromTempCache(ctx context.Context, tempUserId
 }
 
 func (ds dataSourceImpl) CreatePasswordUser(ctx context.Context, userArgs CreatePasswordUserArgs) (user database_queries.User, err error) {
+	var passwordEmail pgtype.Text
+	var passwordPhone pgtype.Text
+
+	userArgs.LoginIdentityType.Fold(LoginIdentityFoldActions{
+		OnEmail: func() { passwordEmail = dbutils.ToPgTypeText(userArgs.Email.String()) },
+		OnPhone: func() { passwordPhone = dbutils.ToPgTypeText(userArgs.Phone.ToE164()) },
+	})
+
 	userRow, err := ds.db.Queries.LoginIdentityCreateNewUserAndPasswordLoginIdentity(
 		ctx,
 		database_queries.LoginIdentityCreateNewUserAndPasswordLoginIdentityParams{
@@ -161,8 +170,8 @@ func (ds dataSourceImpl) CreatePasswordUser(ctx context.Context, userArgs Create
 			UserRoleName:     dbutils.ToPgTypeText(userArgs.RoleName),
 
 			IdentityType:       userArgs.LoginIdentityType.String(),
-			PasswordEmail:      dbutils.ToPgTypeText(userArgs.Email),
-			PasswordPhone:      dbutils.ToPgTypeText(userArgs.Phone),
+			PasswordEmail:      passwordEmail,
+			PasswordPhone:      passwordPhone,
 			PasswordHashedPass: userArgs.HashedPass,
 			PasswordPassSalt:   userArgs.PassSalt,
 			PasswordVerifiedAt: pgtype.Timestamptz{Time: userArgs.VerifiedAt, Valid: !userArgs.VerifiedAt.IsZero()},
@@ -214,11 +223,9 @@ func (ds dataSourceImpl) GetPasswordLoginIdentity(ctx context.Context, identityV
 			IdentityValue: identityValue,
 		},
 	)
-
 	if dbutils.IsErrPgxNoRows(err) {
 		err = apperr.ErrNoResult
 	}
-
 	return loginIdentity, err
 }
 
@@ -323,24 +330,24 @@ func (ds dataSourceImpl) GetInstallationUsingToken(ctx context.Context, installa
 	return installation, err
 }
 
-func (ds dataSourceImpl) IsEmailUsedInPasswordLoginIdentity(ctx context.Context, email string) (isUsed bool, err error) {
-	count, err := ds.db.Queries.LoginIdentityIsEmailUsed(ctx, dbutils.ToPgTypeText(email))
+func (ds dataSourceImpl) IsEmailUsedInPasswordLoginIdentity(ctx context.Context, email *email.Email) (isUsed bool, err error) {
+	count, err := ds.db.Queries.LoginIdentityIsEmailUsed(ctx, dbutils.ToPgTypeText(email.String()))
 	if count > 0 {
 		isUsed = true
 	}
 	return isUsed, err
 }
 
-func (ds dataSourceImpl) IsPhoneUsedInPasswordLoginIdentity(ctx context.Context, phone string) (isUsed bool, err error) {
-	count, err := ds.db.Queries.LoginIdentityIsPhoneUsed(ctx, dbutils.ToPgTypeText(phone))
+func (ds dataSourceImpl) IsPhoneUsedInPasswordLoginIdentity(ctx context.Context, phone *phonenumber.PhoneNumber) (isUsed bool, err error) {
+	count, err := ds.db.Queries.LoginIdentityIsPhoneUsed(ctx, dbutils.ToPgTypeText(phone.ToE164()))
 	if count > 0 {
 		isUsed = true
 	}
 	return isUsed, err
 }
 
-func (ds dataSourceImpl) IsEmailUsedInOidcLoginIdentity(ctx context.Context, email string) (isUsed bool, err error) {
-	count, err := ds.db.Queries.LoginIdentityIsOidcEmailUsed(ctx, dbutils.ToPgTypeText(email))
+func (ds dataSourceImpl) IsEmailUsedInOidcLoginIdentity(ctx context.Context, email *email.Email) (isUsed bool, err error) {
+	count, err := ds.db.Queries.LoginIdentityIsOidcEmailUsed(ctx, dbutils.ToPgTypeText(email.String()))
 	if count > 0 {
 		isUsed = true
 	}
@@ -570,7 +577,6 @@ func oidcCreateAccountAndLogin(ctx context.Context, queries *database_queries.Qu
 	result, err := queries.LoginIdentityCreateNewUserAndOIDCLoginIdentity(
 		ctx,
 		database_queries.LoginIdentityCreateNewUserAndOIDCLoginIdentityParams{
-
 			UserUsername:               oidcParamData.UserUsername,
 			UserProfileImage:           oidcParamData.UserProfileImage,
 			UserFirstName:              oidcParamData.UserFirstName,
@@ -585,7 +591,7 @@ func oidcCreateAccountAndLogin(ctx context.Context, queries *database_queries.Qu
 			OauthTokenExpiresAt:        oidcParamData.OauthTokenExpiresAt,
 			OauthTokenIssuedAt:         oidcParamData.OauthTokenIssuedAt,
 			OidcSub:                    oidcParamData.OidcSub,
-			OidcEmail:                  oidcParamData.OidcEmail,
+			OidcEmail:                  dbutils.ToPgTypeText(oidcParamData.OidcEmail.String()),
 			OidcIss:                    oidcParamData.OidcIss,
 			OidcAud:                    oidcParamData.OidcAud,
 			OidcGivenName:              oidcParamData.OidcGivenName,
@@ -719,7 +725,7 @@ func oidcLoginOnly(
 		ctx,
 		database_queries.OidcDataUpdateRecoredParams{
 			ID:         oidcUser.OidcDataID,
-			Email:      oidcParamData.OidcEmail,
+			Email:      dbutils.ToPgTypeText(oidcParamData.OidcEmail.String()),
 			GivenName:  oidcParamData.OidcGivenName,
 			FamilyName: oidcParamData.OidcFamilyName,
 			Name:       oidcParamData.OidcName,

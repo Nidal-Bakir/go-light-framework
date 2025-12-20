@@ -14,7 +14,7 @@ import (
 	"github.com/Nidal-Bakir/go-todo-backend/internal/middleware/ratelimiter"
 	"github.com/Nidal-Bakir/go-todo-backend/internal/middleware/ratelimiter/redis_ratelimiter"
 	"github.com/Nidal-Bakir/go-todo-backend/internal/tracker"
-	"github.com/Nidal-Bakir/go-todo-backend/internal/utils/emailvalidator"
+	"github.com/Nidal-Bakir/go-todo-backend/internal/utils/email"
 	"github.com/Nidal-Bakir/go-todo-backend/internal/utils/phonenumber"
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5/pgtype"
@@ -151,7 +151,7 @@ func createAcccountRateLimiterByAccessKey(ctx context.Context, rdb *redis.Client
 			createAccountParam.LoginIdentityType.FoldOr(
 				auth.LoginIdentityFoldActions{
 					OnEmail: func() {
-						key = createAccountParam.Email
+						key = createAccountParam.Email.String()
 					},
 					OnPhone: func() {
 						if createAccountParam.PhoneNumber != nil {
@@ -201,7 +201,7 @@ func loginRateLimiterByAccessKey(ctx context.Context, rdb *redis.Client) func(ne
 			loginParam.LoginIdentityType.FoldOr(
 				auth.LoginIdentityFoldActions{
 					OnEmail: func() {
-						key = loginParam.Email
+						key = loginParam.Email.String()
 					},
 					OnPhone: func() {
 						if loginParam.PhoneNumber != nil {
@@ -345,7 +345,7 @@ func forgetPasswordRateLimiterByAccessKey(ctx context.Context, rdb *redis.Client
 			param.LoginIdentityType.FoldOr(
 				auth.LoginIdentityFoldActions{
 					OnEmail: func() {
-						key = param.Email
+						key = param.Email.String()
 					},
 					OnPhone: func() {
 						key = param.PhoneNumber.ToE164()
@@ -378,7 +378,7 @@ func forgetPasswordRateLimiterByAccessKey(ctx context.Context, rdb *redis.Client
 
 type createAccountParams struct {
 	LoginIdentityType auth.LoginIdentityType
-	Email             string
+	Email             *email.Email
 	PhoneNumber       *phonenumber.PhoneNumber
 	Password          string
 	FirstName         string
@@ -451,8 +451,8 @@ func validateCreateAccountParam(r *http.Request) (createAccountParams, []error) 
 	loginIdentityType.FoldOr(
 		auth.LoginIdentityFoldActions{
 			OnEmail: func() {
-				createAccountParam.Email = r.FormValue("email")
-				if !emailvalidator.IsValidEmail(createAccountParam.Email) {
+				createAccountParam.Email = email.New(r.FormValue("email"))
+				if !createAccountParam.Email.IsValidEmail() {
 					errList = append(errList, apperr.ErrInvalidEmail)
 				}
 			},
@@ -553,7 +553,7 @@ func validateVareifyAccountParams(r *http.Request) (vareifyAccountParams, []erro
 
 type passwordLoginParams struct {
 	LoginIdentityType auth.LoginIdentityType
-	Email             string
+	Email             *email.Email
 	PhoneNumber       *phonenumber.PhoneNumber
 	Password          string
 }
@@ -626,11 +626,9 @@ func validatePasswordLoginParam(r *http.Request) (passwordLoginParams, []error) 
 	loginIdentityType.FoldOr(
 		auth.LoginIdentityFoldActions{
 			OnEmail: func() {
-				emailFormStr := r.FormValue("email")
-				if !emailvalidator.IsValidEmail(emailFormStr) {
+				loginParam.Email = email.New(r.FormValue("email"))
+				if !loginParam.Email.IsValidEmail() {
 					errList = append(errList, apperr.ErrInvalidEmail)
-				} else {
-					loginParam.Email = emailFormStr
 				}
 			},
 			OnPhone: func() {
@@ -801,7 +799,7 @@ func NewPublicUserFromAuthUser(u auth.User) publicUser {
 
 type forgetPasswordParams struct {
 	LoginIdentityType auth.LoginIdentityType
-	Email             string
+	Email             *email.Email
 	PhoneNumber       *phonenumber.PhoneNumber
 }
 
@@ -856,8 +854,8 @@ func validateForgetPasswordParam(r *http.Request) (forgetPasswordParams, []error
 	loginIdentityType.FoldOr(
 		auth.LoginIdentityFoldActions{
 			OnEmail: func() {
-				params.Email = r.FormValue("email")
-				if !emailvalidator.IsValidEmail(params.Email) {
+				params.Email = email.New(r.FormValue("email"))
+				if !params.Email.IsValidEmail() {
 					errList = append(errList, apperr.ErrInvalidEmail)
 				}
 			},
@@ -976,8 +974,8 @@ func userProfile(authRepo auth.Repository) http.HandlerFunc {
 
 			loginIdentitiesPublicApi[i] = PublicAPI{
 				ID:                lo.ID,
-				Email:             lo.Email,
-				Phone:             NewPhonePublicAPI(lo.Phone),
+				Email:             newEmailForPublicAPI(lo.Email),
+				Phone:             newPhonePublicAPI(lo.Phone),
 				IsVerified:        lo.IsVerified,
 				LoginIdentityType: lo.LoginIdentityType.String(),
 				OidcProvider:      lo.OidcProvider,

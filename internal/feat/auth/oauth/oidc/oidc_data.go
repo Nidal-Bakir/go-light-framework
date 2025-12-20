@@ -2,6 +2,7 @@ package oidc
 
 import (
 	oauth "github.com/Nidal-Bakir/go-todo-backend/internal/feat/auth/oauth/utils"
+	"github.com/Nidal-Bakir/go-todo-backend/internal/utils/email"
 	"github.com/jackc/pgx/v5/pgtype"
 )
 
@@ -15,7 +16,7 @@ type OidcData struct {
 	OidcFamilyName pgtype.Text
 	OidcName       pgtype.Text
 	OidcSub        string
-	OidcEmail      pgtype.Text
+	OidcEmail      *email.Email
 	OidcPicture    pgtype.Text
 	OidcIss        string
 	OidcAud        string

@@ -17,6 +17,7 @@ import (
 	"github.com/Nidal-Bakir/go-todo-backend/internal/utils"
 	"github.com/redis/go-redis/v9"
 	"github.com/rs/zerolog"
+	"golang.org/x/text/language"
 )
 
 var (
@@ -25,23 +26,29 @@ var (
 )
 
 type Server struct {
-	port             int
-	db               *database.Service
-	rdb              *redis.Client
-	zlog             *zerolog.Logger
-	gatewaysProvider gateway.Provider
+	port                    int
+	db                      *database.Service
+	rdb                     *redis.Client
+	zlog                    *zerolog.Logger
+	gatewaysProviderFactory gateway.ProviderFactory
 }
 
 func NewServer(ctx context.Context) *http.Server {
-
-	l10n.InitL10n("./l10n", []string{"en", "ar"}, ctx)
+	l10n.InitL10n(
+		ctx,
+		"./l10n",
+		[]language.Tag{
+			utils.Must(language.Parse("en")),
+			utils.Must(language.Parse("ar")),
+		},
+	)
 
 	server := &Server{
-		port:             utils.Must(strconv.Atoi(serverPort)),
-		db:               database.NewConnection(ctx),
-		rdb:              redisdb.NewRedisClient(ctx),
-		zlog:             zerolog.Ctx(ctx),
-		gatewaysProvider: gateway.NewGatewaysProvider(ctx),
+		port:                    utils.Must(strconv.Atoi(serverPort)),
+		db:                      database.NewConnection(ctx),
+		rdb:                     redisdb.NewRedisClient(ctx),
+		zlog:                    zerolog.Ctx(ctx),
+		gatewaysProviderFactory: gateway.NewProviderFactory(ctx),
 	}
 
 	return &http.Server{

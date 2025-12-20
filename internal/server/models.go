@@ -3,6 +3,7 @@ package server
 import (
 	"fmt"
 
+	"github.com/Nidal-Bakir/go-todo-backend/internal/utils/email"
 	"github.com/Nidal-Bakir/go-todo-backend/internal/utils/phonenumber"
 )
 
@@ -13,7 +14,7 @@ type PhonePublicAPI struct {
 	E164                      string `json:"e164,omitzero"`
 }
 
-func NewPhonePublicAPI(phoneNumber *phonenumber.PhoneNumber) *PhonePublicAPI {
+func newPhonePublicAPI(phoneNumber *phonenumber.PhoneNumber) *PhonePublicAPI {
 	if phoneNumber == nil {
 		return nil
 	}
@@ -23,4 +24,11 @@ func NewPhonePublicAPI(phoneNumber *phonenumber.PhoneNumber) *PhonePublicAPI {
 		E164:                      phoneNumber.ToE164(),
 		InternationalFormat:       phoneNumber.FormatToInternational(),
 	}
+}
+
+func newEmailForPublicAPI(e *email.Email) string {
+	if e == nil {
+		return ""
+	}
+	return e.String()
 }

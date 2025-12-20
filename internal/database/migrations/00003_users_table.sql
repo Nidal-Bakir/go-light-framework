@@ -10,7 +10,6 @@ CREATE TABLE users (
     updated_at TIMESTAMPTZ DEFAULT NOW() NOT NULL,
     blocked_at TIMESTAMPTZ,
     blocked_until TIMESTAMPTZ,
-    mfa_enforced boolean DEFAULT FALSE,
     deleted_at TIMESTAMPTZ,
     role_name VARCHAR(100) REFERENCES role(name)
 );

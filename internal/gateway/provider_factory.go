@@ -4,16 +4,12 @@ import (
 	"context"
 )
 
-type Sender interface {
-	Send(ctx context.Context, target, content string) error
-}
-
-type Provider interface {
+type ProviderFactory interface {
 	NewSMSProvider(ctx context.Context, contryCode int) Sender
 	NewEmailProvider(ctx context.Context) Sender
 }
 
-func NewGatewaysProvider(ctx context.Context) Provider {
+func NewProviderFactory(ctx context.Context) ProviderFactory {
 	return new(providerImpl)
 }
 

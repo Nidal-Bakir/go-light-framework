@@ -11,7 +11,7 @@ import (
 func (s *Server) NewAuthRepository() auth.Repository {
 	return auth.NewRepository(
 		auth.NewDataSource(s.db, s.rdb),
-		s.gatewaysProvider,
+		s.gatewaysProviderFactory,
 		password_hasher.NewPasswordHasher(password_hasher.BcryptPasswordHash), // changing this value will break the auth system
 		auth.NewAuthJWT(appjwt.NewAppJWT()),
 	)

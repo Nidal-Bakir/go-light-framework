@@ -9,47 +9,64 @@ import (
 	"github.com/rs/zerolog"
 
 	"github.com/nicksnyder/go-i18n/v2/i18n"
+
 	"golang.org/x/text/language"
 )
 
 var (
-	bundle    *i18n.Bundle
-	locales   = map[string]*Localizer{}
-	languages = []string{}
+	bundle                *i18n.Bundle
+	locales               = map[string]*Localizer{}
+	languageTags          []language.Tag
+	languageTagsCanonical []string
 )
+
+func SupportedTags() []language.Tag {
+	return languageTags
+}
+
+func SupportedTagsCanonical() []string {
+	return languageTagsCanonical
+}
 
 type Localizer struct {
 	l      *i18n.Localizer
 	logger zerolog.Logger
+	tag    language.Tag
 }
 
-func InitL10n(path string, langs []string, ctx context.Context) {
+func InitL10n(ctx context.Context, path string, tags []language.Tag) {
 	zlog := *zerolog.Ctx(ctx)
 
-	utils.Assert(len(langs) != 0, "The langs slice can not be empty")
-	languages = langs
+	utils.Assert(len(tags) != 0, "The langs slice can not be empty")
+	languageTags = tags
 
 	bundle = i18n.NewBundle(language.English)
 	bundle.RegisterUnmarshalFunc("json", json.Unmarshal)
 
 	logEvent := zlog.Info()
-	for _, lang := range languages {
-		filePath := fmt.Sprintf(path+"/%s.json", lang)
+	for _, tag := range languageTags {
+		canonical := tag.String()
+		filePath := fmt.Sprintf(path+"/%s.json", canonical)
 		bundle.MustLoadMessageFile(filePath)
-		locales[lang] = &Localizer{l: i18n.NewLocalizer(bundle, lang), logger: zlog}
-
-		logEvent.Str(lang, filePath)
+		locales[canonical] = &Localizer{l: i18n.NewLocalizer(bundle, canonical), logger: zlog, tag: tag}
+		languageTagsCanonical = append(languageTagsCanonical, canonical)
+		logEvent.Str(canonical, filePath)
 	}
 	logEvent.Msg("Localization files loaded")
 }
 
-func GetLocalizer(lang string) *Localizer {
-	if _, ok := locales[lang]; !ok {
-		l := locales[languages[0]]
-		l.logger.Error().Msgf("Language %s not found, will default to %s", lang, languages[0])
+func GetLocalizer(tag language.Tag) *Localizer {
+	canonical := tag.String()
+	if _, ok := locales[canonical]; !ok {
+		l := locales[languageTags[0].String()]
+		l.logger.Error().Msgf("Language %s not found, will default to %s", canonical, languageTags[0].String())
 		return l
 	}
-	return locales[lang]
+	return locales[canonical]
+}
+
+func (l *Localizer) GetLanguageTag() language.Tag {
+	return l.tag
 }
 
 func (l *Localizer) GetWithId(id string) string {

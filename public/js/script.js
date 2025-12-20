@@ -11,7 +11,7 @@ document.getElementById("apiCallBtnInstallation").addEventListener("click", asyn
       method: "POST",
       headers: {
         Accept: "application/json",
-        "Accept-Language": "ar",
+        // "Accept-Language": "ar",
         "Content-Type": "application/x-www-form-urlencoded",
         "A-Client-API-Token": "123",
       },

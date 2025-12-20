@@ -94,7 +94,7 @@ func googleOidcFunc(ctx context.Context, code, codeVerifier, oidcToken string) (
 	data.OidcIss = claims.Issuer
 	data.OidcIat = dbutils.ToPgTypeTimestamp(claims.IssuedAt)
 	data.OidcSub = claims.Sub
-	data.OidcEmail = dbutils.ToPgTypeText(claims.Email)
+	data.OidcEmail = claims.Email
 	data.OidcGivenName = dbutils.ToPgTypeText(claims.GivenName)
 	data.OidcFamilyName = dbutils.ToPgTypeText(claims.FamilyName)
 	data.OidcName = dbutils.ToPgTypeText(claims.Name)

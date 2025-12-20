@@ -9,7 +9,7 @@ import (
 )
 
 const (
-	authSubject = "auth"
+	loginSubject = "login"
 	userIdKey   = "user_id"
 
 	installationSubject = "installation"
@@ -37,13 +37,13 @@ func (a AuthClaims) toMap() map[string]string {
 	return m
 }
 
-func (authJWT AuthJWT) GenWithClaimsForUser(userId int32, expiresAt time.Time) (string, error) {
+func (authJWT AuthJWT) GenrateLoginToken(userId int32, expiresAt time.Time) (string, error) {
 	authClaims := AuthClaims{UserId: userId}
-	return authJWT.appjwt.GenWithClaims(expiresAt, authClaims.toMap(), authSubject)
+	return authJWT.appjwt.GenWithClaims(expiresAt, authClaims.toMap(), loginSubject)
 }
 
-func (authJWT AuthJWT) VerifyTokenForUser(token string) (*AuthClaims, error) {
-	c, err := authJWT.appjwt.VerifyToken(token, authSubject)
+func (authJWT AuthJWT) VerifyLoginToken(token string) (*AuthClaims, error) {
+	c, err := authJWT.appjwt.VerifyToken(token, loginSubject)
 	if err != nil {
 		return nil, err
 	}
@@ -67,12 +67,12 @@ func (a InstallationClaims) toMap() map[string]string {
 	return m
 }
 
-func (authJWT AuthJWT) GenWithClaimsForInstallation(expiresAt time.Time) (string, error) {
+func (authJWT AuthJWT) GenerateInstallationToken(expiresAt time.Time) (string, error) {
 	installationClaims := InstallationClaims{}
 	return authJWT.appjwt.GenWithClaims(expiresAt, installationClaims.toMap(), installationSubject)
 }
 
-func (authJWT AuthJWT) VerifyTokenForInstallation(token string) (*InstallationClaims, error) {
+func (authJWT AuthJWT) VerifyInstallationToken(token string) (*InstallationClaims, error) {
 	c, err := authJWT.appjwt.VerifyToken(token, installationSubject)
 	if err != nil {
 		return nil, err
