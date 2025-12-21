@@ -9,7 +9,7 @@ import (
 	"github.com/Nidal-Bakir/go-todo-backend/internal/database/database_queries"
 	"github.com/Nidal-Bakir/go-todo-backend/internal/feat/perm"
 	"github.com/Nidal-Bakir/go-todo-backend/internal/feat/perm/baseperm"
-	dbutils "github.com/Nidal-Bakir/go-todo-backend/internal/utils/db_utils"
+	redisdb "github.com/Nidal-Bakir/go-todo-backend/internal/redis_db"
 	"github.com/redis/go-redis/v9"
 	"github.com/rs/zerolog"
 )
@@ -48,7 +48,7 @@ func (r repositoryImpl) GetSetting(ctx context.Context, role, label string) (str
 
 	setting, err := r.db.Queries.SettingsGetByLable(ctx, label)
 	if err != nil {
-		if dbutils.IsErrPgxNoRows(err) {
+		if database.IsErrPgxNoRows(err) {
 			err = apperr.ErrNoResult
 		} else {
 			zlog.Err(err).Msg("can not get setting")
@@ -66,7 +66,7 @@ func (r repositoryImpl) GetSetting(ctx context.Context, role, label string) (str
 func (r repositoryImpl) readSettingFromCache(ctx context.Context, label string, zlog zerolog.Logger) *string {
 	val, err := r.redis.HGet(ctx, redisKey, label).Result()
 	if err != nil {
-		if !dbutils.IsErrRedisNilNoRows(err) {
+		if !redisdb.IsErrRedisNilNoRows(err) {
 			zlog.Err(err).Msg("could not read the settings value from redis")
 		}
 		return nil
@@ -102,7 +102,7 @@ func (r repositoryImpl) SetSetting(ctx context.Context, role, label, value strin
 		ctx,
 		database_queries.SettingsSetSettingParams{
 			Label: label,
-			Value: dbutils.ToPgTypeText(value),
+			Value: database.ToPgTypeText(value),
 		},
 	)
 	if err != nil {

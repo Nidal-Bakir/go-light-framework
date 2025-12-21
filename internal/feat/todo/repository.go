@@ -6,7 +6,7 @@ import (
 	"github.com/Nidal-Bakir/go-todo-backend/internal/apperr"
 	"github.com/Nidal-Bakir/go-todo-backend/internal/database"
 	"github.com/Nidal-Bakir/go-todo-backend/internal/database/database_queries"
-	dbutils "github.com/Nidal-Bakir/go-todo-backend/internal/utils/db_utils"
+
 	"github.com/jackc/pgx/v5/pgtype"
 	"github.com/redis/go-redis/v9"
 	"github.com/rs/zerolog"
@@ -47,7 +47,7 @@ func (repo repositoryImpl) GetTodos(ctx context.Context, userId, offset, limit i
 	)
 
 	if err != nil {
-		if dbutils.IsErrPgxNoRows(err) {
+		if database.IsErrPgxNoRows(err) {
 			err = apperr.ErrNoResult
 		} else {
 			zlog.Err(err).Msg("can not get todo")
@@ -80,7 +80,7 @@ func (repo repositoryImpl) GetTodo(ctx context.Context, userId, todoId int) (Tod
 		},
 	)
 	if err != nil {
-		if dbutils.IsErrPgxNoRows(err) {
+		if database.IsErrPgxNoRows(err) {
 			err = apperr.ErrNoResult
 		} else {
 			zlog.Err(err).Msg("can not get todo")
@@ -166,7 +166,7 @@ func (repo repositoryImpl) UpdateTodo(ctx context.Context, userId, todoId int, d
 	)
 
 	if err != nil {
-		if dbutils.IsErrPgxNoRows(err) {
+		if database.IsErrPgxNoRows(err) {
 			err = apperr.ErrNoResult
 		} else {
 			zlog.Err(err).Msg("can not create todo")
@@ -194,7 +194,7 @@ func (repo repositoryImpl) DeleteTodo(ctx context.Context, userId, todoId int) e
 		},
 	)
 
-	if dbutils.IsErrPgxNoRows(err) {
+	if database.IsErrPgxNoRows(err) {
 		err = apperr.ErrNoResult
 	} else {
 		zlog.Err(err).Msg("can not delete todo")

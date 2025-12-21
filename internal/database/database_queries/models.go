@@ -277,6 +277,7 @@ type OtpChallenge struct {
 	OtpHash   string             `json:"otp_hash"`
 	Channel   string             `json:"channel"`
 	Attempts  pgtype.Int4        `json:"attempts"`
+	Purpose   string             `json:"purpose"`
 	CreatedAt pgtype.Timestamptz `json:"created_at"`
 	UpdatedAt pgtype.Timestamptz `json:"updated_at"`
 	ExpiresAt pgtype.Timestamptz `json:"expires_at"`

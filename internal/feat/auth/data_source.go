@@ -2,7 +2,6 @@ package auth
 
 import (
 	"context"
-	"errors"
 	"fmt"
 	"net/netip"
 	"time"
@@ -10,11 +9,9 @@ import (
 	"github.com/Nidal-Bakir/go-todo-backend/internal/apperr"
 	"github.com/Nidal-Bakir/go-todo-backend/internal/database"
 	"github.com/Nidal-Bakir/go-todo-backend/internal/database/database_queries"
-	dbutils "github.com/Nidal-Bakir/go-todo-backend/internal/utils/db_utils"
 	"github.com/Nidal-Bakir/go-todo-backend/internal/utils/email"
 	"github.com/Nidal-Bakir/go-todo-backend/internal/utils/phonenumber"
 	"github.com/google/uuid"
-	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgtype"
 	"github.com/redis/go-redis/v9"
 	"github.com/rs/zerolog"
@@ -84,7 +81,7 @@ func NewDataSource(db *database.Service, redis *redis.Client) DataSource {
 func (ds dataSourceImpl) GetUserById(ctx context.Context, id int32) (database_queries.UsersGetUserByIdRow, error) {
 	dbUser, err := ds.db.Queries.UsersGetUserById(ctx, id)
 	if err != nil {
-		if dbutils.IsErrPgxNoRows(err) {
+		if database.IsErrPgxNoRows(err) {
 			return dbUser, apperr.ErrNoResult
 		}
 		return dbUser, err
@@ -95,7 +92,7 @@ func (ds dataSourceImpl) GetUserById(ctx context.Context, id int32) (database_qu
 func (ds dataSourceImpl) GetUserAndSessionDataBySessionToken(ctx context.Context, sessionToken string) (database_queries.UsersGetUserAndSessionDataBySessionTokenRow, error) {
 	userWithSessionData, err := ds.db.Queries.UsersGetUserAndSessionDataBySessionToken(ctx, sessionToken)
 	if err != nil {
-		if dbutils.IsErrPgxNoRows(err) {
+		if database.IsErrPgxNoRows(err) {
 			return userWithSessionData, apperr.ErrNoResult
 		}
 		return userWithSessionData, err
@@ -155,8 +152,8 @@ func (ds dataSourceImpl) CreatePasswordUser(ctx context.Context, userArgs Create
 	var passwordPhone pgtype.Text
 
 	userArgs.LoginIdentityType.Fold(LoginIdentityFoldActions{
-		OnEmail: func() { passwordEmail = dbutils.ToPgTypeText(userArgs.Email.String()) },
-		OnPhone: func() { passwordPhone = dbutils.ToPgTypeText(userArgs.Phone.ToE164()) },
+		OnEmail: func() { passwordEmail = database.ToPgTypeText(userArgs.Email.String()) },
+		OnPhone: func() { passwordPhone = database.ToPgTypeText(userArgs.Phone.ToE164()) },
 	})
 
 	userRow, err := ds.db.Queries.LoginIdentityCreateNewUserAndPasswordLoginIdentity(
@@ -165,9 +162,9 @@ func (ds dataSourceImpl) CreatePasswordUser(ctx context.Context, userArgs Create
 
 			UserFirstName:    userArgs.Fname,
 			UserUsername:     userArgs.Username,
-			UserLastName:     dbutils.ToPgTypeText(userArgs.Lname),
-			UserProfileImage: dbutils.ToPgTypeText(userArgs.ProfileImagePath),
-			UserRoleName:     dbutils.ToPgTypeText(userArgs.RoleName),
+			UserLastName:     database.ToPgTypeText(userArgs.Lname),
+			UserProfileImage: database.ToPgTypeText(userArgs.ProfileImagePath),
+			UserRoleName:     database.ToPgTypeText(userArgs.RoleName),
 
 			IdentityType:       userArgs.LoginIdentityType.String(),
 			PasswordEmail:      passwordEmail,
@@ -208,7 +205,7 @@ func (ds dataSourceImpl) GetPasswordLoginIdentityWithUser(ctx context.Context, i
 		},
 	)
 
-	if dbutils.IsErrPgxNoRows(err) {
+	if database.IsErrPgxNoRows(err) {
 		err = apperr.ErrNoResult
 	}
 
@@ -223,7 +220,7 @@ func (ds dataSourceImpl) GetPasswordLoginIdentity(ctx context.Context, identityV
 			IdentityValue: identityValue,
 		},
 	)
-	if dbutils.IsErrPgxNoRows(err) {
+	if database.IsErrPgxNoRows(err) {
 		err = apperr.ErrNoResult
 	}
 	return loginIdentity, err
@@ -237,8 +234,9 @@ func (ds dataSourceImpl) CreateNewSessionAndAttachUserToInstallation(
 	ipAddress netip.Addr,
 	expiresAt time.Time,
 ) (err error) {
-	return ds.usingTransaction(
+	return database.UseTransaction(
 		ctx,
+		ds.db,
 		func(queries *database_queries.Queries) error {
 			return ds.createNewSessionAndAttachUserToInstallation(
 				ctx,
@@ -310,7 +308,7 @@ func (ds dataSourceImpl) GetInstallationUsingTokenAndWhereAttachTo(ctx context.C
 		},
 	)
 
-	if dbutils.IsErrPgxNoRows(err) {
+	if database.IsErrPgxNoRows(err) {
 		err = apperr.ErrNoResult
 	}
 
@@ -323,7 +321,7 @@ func (ds dataSourceImpl) GetInstallationUsingToken(ctx context.Context, installa
 		installationToken,
 	)
 
-	if dbutils.IsErrPgxNoRows(err) {
+	if database.IsErrPgxNoRows(err) {
 		err = apperr.ErrNoResult
 	}
 
@@ -331,7 +329,7 @@ func (ds dataSourceImpl) GetInstallationUsingToken(ctx context.Context, installa
 }
 
 func (ds dataSourceImpl) IsEmailUsedInPasswordLoginIdentity(ctx context.Context, email *email.Email) (isUsed bool, err error) {
-	count, err := ds.db.Queries.LoginIdentityIsEmailUsed(ctx, dbutils.ToPgTypeText(email.String()))
+	count, err := ds.db.Queries.LoginIdentityIsEmailUsed(ctx, database.ToPgTypeText(email.String()))
 	if count > 0 {
 		isUsed = true
 	}
@@ -339,7 +337,7 @@ func (ds dataSourceImpl) IsEmailUsedInPasswordLoginIdentity(ctx context.Context,
 }
 
 func (ds dataSourceImpl) IsPhoneUsedInPasswordLoginIdentity(ctx context.Context, phone *phonenumber.PhoneNumber) (isUsed bool, err error) {
-	count, err := ds.db.Queries.LoginIdentityIsPhoneUsed(ctx, dbutils.ToPgTypeText(phone.ToE164()))
+	count, err := ds.db.Queries.LoginIdentityIsPhoneUsed(ctx, database.ToPgTypeText(phone.ToE164()))
 	if count > 0 {
 		isUsed = true
 	}
@@ -347,7 +345,7 @@ func (ds dataSourceImpl) IsPhoneUsedInPasswordLoginIdentity(ctx context.Context,
 }
 
 func (ds dataSourceImpl) IsEmailUsedInOidcLoginIdentity(ctx context.Context, email *email.Email) (isUsed bool, err error) {
-	count, err := ds.db.Queries.LoginIdentityIsOidcEmailUsed(ctx, dbutils.ToPgTypeText(email.String()))
+	count, err := ds.db.Queries.LoginIdentityIsOidcEmailUsed(ctx, database.ToPgTypeText(email.String()))
 	if count > 0 {
 		isUsed = true
 	}
@@ -367,7 +365,7 @@ func (ds dataSourceImpl) ChangePasswordLoginIdentityForUser(ctx context.Context,
 func (ds dataSourceImpl) GetAllPasswordLoginIdentitiesForUser(ctx context.Context, userId int32) ([]database_queries.LoginIdentityGetAllPasswordLoginIdentitiesByUserIdRow, error) {
 	result, err := ds.db.Queries.LoginIdentityGetAllPasswordLoginIdentitiesByUserId(ctx, userId)
 
-	if dbutils.IsErrPgxNoRows(err) {
+	if database.IsErrPgxNoRows(err) {
 		err = apperr.ErrNoResult
 	}
 
@@ -377,7 +375,7 @@ func (ds dataSourceImpl) GetAllPasswordLoginIdentitiesForUser(ctx context.Contex
 func (ds dataSourceImpl) GetAllLoginIdentitiesForUser(ctx context.Context, userId int32) ([]database_queries.LoginIdentityGetAllByUserIdRow, error) {
 	result, err := ds.db.Queries.LoginIdentityGetAllByUserId(ctx, userId)
 
-	if dbutils.IsErrPgxNoRows(err) {
+	if database.IsErrPgxNoRows(err) {
 		err = apperr.ErrNoResult
 	}
 
@@ -389,13 +387,13 @@ func (ds dataSourceImpl) CreateInstallation(ctx context.Context, data CreateInst
 		ctx,
 		database_queries.InstallationCreateNewInstallationParams{
 			InstallationToken:       installationToken,
-			NotificationToken:       dbutils.ToPgTypeText(data.NotificationToken),
+			NotificationToken:       database.ToPgTypeText(data.NotificationToken),
 			AppVersion:              data.AppVersion,
 			Locale:                  data.Locale,
-			DeviceOsVersion:         dbutils.ToPgTypeText(data.DeviceOSVersion),
+			DeviceOsVersion:         database.ToPgTypeText(data.DeviceOSVersion),
 			DeviceOs:                data.DeviceOS.String(),
 			ClientType:              data.ClientType.String(),
-			DeviceManufacturer:      dbutils.ToPgTypeText(data.DeviceManufacturer),
+			DeviceManufacturer:      database.ToPgTypeText(data.DeviceManufacturer),
 			TimezoneOffsetInMinutes: int32(data.TimezoneOffsetInMinutes),
 		},
 	)
@@ -406,7 +404,7 @@ func (ds dataSourceImpl) UpdateInstallation(ctx context.Context, installationTok
 		ctx,
 		database_queries.InstallationUpdateInstallationParams{
 			InstallationToken:       installationToken,
-			NotificationToken:       dbutils.ToPgTypeText(data.NotificationToken),
+			NotificationToken:       database.ToPgTypeText(data.NotificationToken),
 			Locale:                  data.Locale,
 			TimezoneOffsetInMinutes: int32(data.TimezoneOffsetInMinutes),
 			AppVersion:              data.AppVersion,
@@ -461,8 +459,9 @@ func (ds dataSourceImpl) DeleteForgetPasswordDataFromTempCache(ctx context.Conte
 }
 
 func (ds dataSourceImpl) ExpTokenAndUnlinkFromInstallation(ctx context.Context, installationId, tokenId int) (err error) {
-	return ds.usingTransaction(
+	return database.UseTransaction(
 		ctx,
+		ds.db,
 		func(queries *database_queries.Queries) error {
 			err = queries.SessionSoftDeleteSession(ctx, int32(tokenId))
 			if err != nil {
@@ -486,8 +485,9 @@ func (ds dataSourceImpl) ExpTokenAndUnlinkFromInstallation(ctx context.Context, 
 }
 
 func (ds dataSourceImpl) ExpAllTokensAndUnlinkThemFromInstallation(ctx context.Context, userId int) error {
-	return ds.usingTransaction(
+	return database.UseTransaction(
 		ctx,
+		ds.db,
 		func(queries *database_queries.Queries) error {
 			err := queries.InstallationDetachSessionFromInstallationByUserId(ctx, int32(userId))
 			if err != nil {
@@ -524,7 +524,7 @@ func (ds dataSourceImpl) LoginOrCreateUserWithOidc(
 			},
 		)
 		if err != nil {
-			if dbutils.IsErrPgxNoRows(err) {
+			if database.IsErrPgxNoRows(err) {
 				loginIdentityId, user, err = oidcCreateAccountAndLogin(ctx, queries, oidcParamData)
 				if err != nil {
 					return err
@@ -565,7 +565,7 @@ func (ds dataSourceImpl) LoginOrCreateUserWithOidc(
 		return nil
 	}
 
-	err := ds.usingTransaction(ctx, fn)
+	err := database.UseTransaction(ctx, ds.db, fn)
 	if err != nil {
 		return database_queries.User{}, err
 	}
@@ -591,7 +591,7 @@ func oidcCreateAccountAndLogin(ctx context.Context, queries *database_queries.Qu
 			OauthTokenExpiresAt:        oidcParamData.OauthTokenExpiresAt,
 			OauthTokenIssuedAt:         oidcParamData.OauthTokenIssuedAt,
 			OidcSub:                    oidcParamData.OidcSub,
-			OidcEmail:                  dbutils.ToPgTypeText(oidcParamData.OidcEmail.String()),
+			OidcEmail:                  database.ToPgTypeText(oidcParamData.OidcEmail.String()),
 			OidcIss:                    oidcParamData.OidcIss,
 			OidcAud:                    oidcParamData.OidcAud,
 			OidcGivenName:              oidcParamData.OidcGivenName,
@@ -661,7 +661,7 @@ func oidcLoginOnly(
 		},
 	)
 	if err != nil {
-		if !dbutils.IsErrPgxNoRows(err) {
+		if !database.IsErrPgxNoRows(err) {
 			return database_queries.User{}, err
 		}
 		// No existing connection found for this user with the given scopes and provider.
@@ -725,7 +725,7 @@ func oidcLoginOnly(
 		ctx,
 		database_queries.OidcDataUpdateRecoredParams{
 			ID:         oidcUser.OidcDataID,
-			Email:      dbutils.ToPgTypeText(oidcParamData.OidcEmail.String()),
+			Email:      database.ToPgTypeText(oidcParamData.OidcEmail.String()),
 			GivenName:  oidcParamData.OidcGivenName,
 			FamilyName: oidcParamData.OidcFamilyName,
 			Name:       oidcParamData.OidcName,
@@ -756,37 +756,4 @@ func oidcLoginOnly(
 		RoleName:     oidcUser.UserRoleName,
 	}
 	return user, nil
-}
-
-func (ds dataSourceImpl) usingTransaction(ctx context.Context, fn func(queries *database_queries.Queries) error) error {
-	tx, err := ds.db.ConnPool.BeginTx(ctx, pgx.TxOptions{})
-	if err != nil {
-		return err
-	}
-
-	defer func() {
-		rolbackFn := func() {
-			rollBackErr := tx.Rollback(ctx)
-			err = errors.Join(rollBackErr, ctx.Err(), err)
-		}
-		commitFn := func() {
-			commitErr := tx.Commit(ctx)
-			err = errors.Join(commitErr, err)
-		}
-
-		select {
-		case <-ctx.Done():
-			rolbackFn()
-		default:
-			if err != nil {
-				rolbackFn()
-			} else {
-				commitFn()
-			}
-		}
-	}()
-
-	queries := ds.db.Queries.WithTx(tx)
-	err = fn(queries)
-	return err
 }

@@ -6,6 +6,7 @@ import (
 	"strconv"
 	"time"
 
+	redisdb "github.com/Nidal-Bakir/go-todo-backend/internal/redis_db"
 	"github.com/Nidal-Bakir/go-todo-backend/internal/utils"
 	"github.com/google/uuid"
 	"github.com/redis/go-redis/v9"
@@ -19,7 +20,7 @@ func NewRedisStore(redis *redis.Client) StoreProvider {
 	return &redisStore{redis}
 }
 
-func (s *redisStore) StoreOtp(ctx context.Context, otpHash string, channel otpChannel, ExpiresAfter time.Duration) (id string, err error) {
+func (s *redisStore) StoreOtp(ctx context.Context, otpHash string, purpose otpPurpose, channel otpChannel, ExpiresAfter time.Duration) (id string, err error) {
 	id = uuid.New().String()
 	err = s.redis.HSetEXWithArgs(
 		ctx,
@@ -32,6 +33,7 @@ func (s *redisStore) StoreOtp(ctx context.Context, otpHash string, channel otpCh
 			ID:        id,
 			OtpHash:   otpHash,
 			Channel:   channel,
+			Purpose:   purpose,
 			CreatedAt: time.Now(),
 			UpdatedAt: time.Now(),
 			Attempts:  0,
@@ -44,6 +46,9 @@ func (s *redisStore) StoreOtp(ctx context.Context, otpHash string, channel otpCh
 func (s *redisStore) GetOtp(ctx context.Context, id string) (*OtpStoreModel, error) {
 	resultMap, err := s.redis.HGetAll(ctx, s.generateKey(id)).Result()
 	if err != nil {
+		if redisdb.IsErrRedisNilNoRows(err) {
+			return nil, NotFoundOTP
+		}
 		return nil, err
 	}
 	return new(OtpStoreModel).fromMap(resultMap), nil
@@ -64,22 +69,30 @@ end
 
 local max = tonumber(ARGV[2])
 
-if attempts < max then
+if attempts <= max then
    return redis.call("HINCRBY", KEYS[1], ARGV[1], ARGV[3])
-else
-   return attempts
 end
+
+local limit_reached = attempts > max
+
+return { attempts, limit_reached }
 `)
 
-func (s *redisStore) IncrementAttemptCounter(ctx context.Context, id string, limit int) (int, error) {
-	return script.Run(
+func (s *redisStore) IncrementAttemptCounter(ctx context.Context, id string, limit int) (attempts int, limitReached bool, err error) {
+	vals, err := script.Run(
 		ctx,
 		s.redis,
 		[]string{s.generateKey(id)}, // KEYS
 		"attempts",                  // ARGV[1]
 		limit,                       // ARGV[2]
 		1,                           // ARGV[3] increment
-	).Int()
+	).Slice()
+	if err != nil {
+		return -1, true, err
+	}
+	attempts = vals[0].(int)
+	limitReached = vals[1].(bool)
+	return int(attempts), limitReached, nil
 }
 
 func (s *redisStore) generateKey(id string) string {
@@ -91,6 +104,7 @@ func (m OtpStoreModel) toKeyValueSlice() []string {
 		"id", m.ID,
 		"otp_hash", m.OtpHash,
 		"channel", m.Channel.String(),
+		"purpose", m.Purpose.String(),
 		"attempts", strconv.Itoa(m.Attempts),
 		"created_at", m.CreatedAt.Format(time.RFC3339),
 		"updated_at", m.UpdatedAt.Format(time.RFC3339),
@@ -102,6 +116,7 @@ func (m *OtpStoreModel) fromMap(data map[string]string) *OtpStoreModel {
 	m.ID = data["id"]
 	m.OtpHash = data["otp_hash"]
 	m.Channel = otpChannel(data["channel"])
+	m.Purpose = otpPurpose(data["purpose"])
 	m.Attempts = utils.Must(strconv.Atoi(data["attempts"]))
 	m.CreatedAt = utils.Must(time.Parse(time.RFC3339, data["created_at"]))
 	m.UpdatedAt = utils.Must(time.Parse(time.RFC3339, data["updated_at"]))

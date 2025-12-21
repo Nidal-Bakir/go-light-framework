@@ -10,7 +10,7 @@ import (
 
 const (
 	loginSubject = "login"
-	userIdKey   = "user_id"
+	userIdKey    = "user_id"
 
 	installationSubject = "installation"
 	installationIdKey   = "installation_id"

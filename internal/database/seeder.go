@@ -8,7 +8,6 @@ import (
 	"github.com/Nidal-Bakir/go-todo-backend/internal/database/database_queries"
 	"github.com/Nidal-Bakir/go-todo-backend/internal/feat/perm/baseperm"
 	"github.com/Nidal-Bakir/go-todo-backend/internal/feat/settings/labels"
-	dbutils "github.com/Nidal-Bakir/go-todo-backend/internal/utils/db_utils"
 
 	"github.com/jackc/pgx/v5"
 	"github.com/rs/zerolog"
@@ -48,7 +47,7 @@ func seed(ctx context.Context, db *Service) (err error) {
 	memoryVersion := seeders[len(seeders)-1].version
 	dbVersion, err := db.Queries.SeederVersionReadLatestAppliedVersion(ctx)
 	if err != nil {
-		if dbutils.IsErrPgxNoRows(err) {
+		if IsErrPgxNoRows(err) {
 			dbVersion = -1
 		} else {
 			return err

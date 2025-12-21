@@ -4,7 +4,7 @@ CREATE TABLE otp_challenge (
     otp_hash TEXT NOT NULL,
     channel TEXT NOT NULL, -- 'sms' or 'email'
     attempts INT DEFAULT 0,
-    purpose TEXT NOT NULL,
+    purpose TEXT NOT NULL, -- create account, reset password, etc....
     created_at TIMESTAMPTZ DEFAULT now(),
     updated_at TIMESTAMPTZ DEFAULT now(),
     expires_at TIMESTAMPTZ NOT NULL

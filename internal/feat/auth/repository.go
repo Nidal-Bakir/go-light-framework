@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"github.com/Nidal-Bakir/go-todo-backend/internal/apperr"
+	"github.com/Nidal-Bakir/go-todo-backend/internal/database"
 	"github.com/Nidal-Bakir/go-todo-backend/internal/database/database_queries"
 	"github.com/Nidal-Bakir/go-todo-backend/internal/feat/auth/oauth/oidc"
 	otp "github.com/Nidal-Bakir/go-todo-backend/internal/feat/otp/sender"
@@ -15,7 +16,6 @@ import (
 	"github.com/Nidal-Bakir/go-todo-backend/internal/gateway"
 	"github.com/Nidal-Bakir/go-todo-backend/internal/utils"
 
-	dbutils "github.com/Nidal-Bakir/go-todo-backend/internal/utils/db_utils"
 	"github.com/Nidal-Bakir/go-todo-backend/internal/utils/email"
 	"github.com/Nidal-Bakir/go-todo-backend/internal/utils/password_hasher"
 	"github.com/Nidal-Bakir/go-todo-backend/internal/utils/phonenumber"
@@ -723,7 +723,7 @@ func (repo repositoryImpl) LoginOrCreateUserWithOidc(
 		oauthProvider:      params.OauthProvider,
 		InstallationId:     installation.ID,
 		IpAddress:          ipAddress,
-		OauthTokenIssuedAt: dbutils.ToPgTypeTimestamp(time.Now()),
+		OauthTokenIssuedAt: database.ToPgTypeTimestamp(time.Now()),
 		UserUsername:       uuid.NewString(),
 		OidcData:           oidcData,
 	}

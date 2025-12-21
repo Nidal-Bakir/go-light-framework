@@ -12,8 +12,24 @@ import (
 	"github.com/jackc/pgx/v5/pgtype"
 )
 
+const otpChallengeDelete = `-- name: OtpChallengeDelete :exec
+DELETE
+FROM otp_challenge
+WHERE id = $1
+`
+
+// OtpChallengeDelete
+//
+//	DELETE
+//	FROM otp_challenge
+//	WHERE id = $1
+func (q *Queries) OtpChallengeDelete(ctx context.Context, id uuid.UUID) error {
+	_, err := q.db.Exec(ctx, otpChallengeDelete, id)
+	return err
+}
+
 const otpChallengeGet = `-- name: OtpChallengeGet :one
-SELECT id, otp_hash, channel, attempts, created_at, updated_at, expires_at
+SELECT id, otp_hash, channel, attempts, purpose, created_at, updated_at, expires_at
 FROM otp_challenge
 WHERE id = $1
 LIMIT 1
@@ -21,7 +37,7 @@ LIMIT 1
 
 // OtpChallengeGet
 //
-//	SELECT id, otp_hash, channel, attempts, created_at, updated_at, expires_at
+//	SELECT id, otp_hash, channel, attempts, purpose, created_at, updated_at, expires_at
 //	FROM otp_challenge
 //	WHERE id = $1
 //	LIMIT 1
@@ -33,6 +49,7 @@ func (q *Queries) OtpChallengeGet(ctx context.Context, id uuid.UUID) (OtpChallen
 		&i.OtpHash,
 		&i.Channel,
 		&i.Attempts,
+		&i.Purpose,
 		&i.CreatedAt,
 		&i.UpdatedAt,
 		&i.ExpiresAt,
@@ -43,8 +60,8 @@ func (q *Queries) OtpChallengeGet(ctx context.Context, id uuid.UUID) (OtpChallen
 const otpChallengeIncAttempt = `-- name: OtpChallengeIncAttempt :one
 UPDATE otp_challenge
 SET attempts = attempts + $1
-WHERE id = $2
-  AND attempts <= $3
+WHERE id = $2 
+ AND attempts <= $3
 RETURNING attempts
 `
 
@@ -59,7 +76,7 @@ type OtpChallengeIncAttemptParams struct {
 //	UPDATE otp_challenge
 //	SET attempts = attempts + $1
 //	WHERE id = $2
-//	  AND attempts <= $3
+//	 AND attempts <= $3
 //	RETURNING attempts
 func (q *Queries) OtpChallengeIncAttempt(ctx context.Context, arg OtpChallengeIncAttemptParams) (pgtype.Int4, error) {
 	row := q.db.QueryRow(ctx, otpChallengeIncAttempt, arg.Inc, arg.ID, arg.Attemptslimit)
@@ -72,7 +89,7 @@ const otpChallengeInsert = `-- name: OtpChallengeInsert :one
 INSERT INTO otp_challenge (
     otp_hash,
     channel,
-    attempts,
+    purpose,
     expires_at
 )
 VALUES (
@@ -81,13 +98,13 @@ VALUES (
     $3,
     $4
 )
-RETURNING id, otp_hash, channel, attempts, created_at, updated_at, expires_at
+RETURNING id
 `
 
 type OtpChallengeInsertParams struct {
 	OtpHash   string             `json:"otp_hash"`
 	Channel   string             `json:"channel"`
-	Attempts  pgtype.Int4        `json:"attempts"`
+	Purpose   string             `json:"purpose"`
 	ExpiresAt pgtype.Timestamptz `json:"expires_at"`
 }
 
@@ -96,7 +113,7 @@ type OtpChallengeInsertParams struct {
 //	INSERT INTO otp_challenge (
 //	    otp_hash,
 //	    channel,
-//	    attempts,
+//	    purpose,
 //	    expires_at
 //	)
 //	VALUES (
@@ -105,23 +122,15 @@ type OtpChallengeInsertParams struct {
 //	    $3,
 //	    $4
 //	)
-//	RETURNING id, otp_hash, channel, attempts, created_at, updated_at, expires_at
-func (q *Queries) OtpChallengeInsert(ctx context.Context, arg OtpChallengeInsertParams) (OtpChallenge, error) {
+//	RETURNING id
+func (q *Queries) OtpChallengeInsert(ctx context.Context, arg OtpChallengeInsertParams) (uuid.UUID, error) {
 	row := q.db.QueryRow(ctx, otpChallengeInsert,
 		arg.OtpHash,
 		arg.Channel,
-		arg.Attempts,
+		arg.Purpose,
 		arg.ExpiresAt,
 	)
-	var i OtpChallenge
-	err := row.Scan(
-		&i.ID,
-		&i.OtpHash,
-		&i.Channel,
-		&i.Attempts,
-		&i.CreatedAt,
-		&i.UpdatedAt,
-		&i.ExpiresAt,
-	)
-	return i, err
+	var id uuid.UUID
+	err := row.Scan(&id)
+	return id, err
 }

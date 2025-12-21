@@ -4,9 +4,9 @@ import (
 	"context"
 	"errors"
 
+	"github.com/Nidal-Bakir/go-todo-backend/internal/database"
 	"github.com/Nidal-Bakir/go-todo-backend/internal/feat/auth/oauth/google"
 	oauth "github.com/Nidal-Bakir/go-todo-backend/internal/feat/auth/oauth/utils"
-	dbutils "github.com/Nidal-Bakir/go-todo-backend/internal/utils/db_utils"
 	"github.com/rs/zerolog"
 	"golang.org/x/oauth2"
 )
@@ -84,24 +84,24 @@ func googleOidcFunc(ctx context.Context, code, codeVerifier, oidcToken string) (
 	}
 
 	if oauthToken != nil {
-		data.OauthAccessToken = dbutils.ToPgTypeText(oauthToken.AccessToken)
-		data.OauthRefreshToken = dbutils.ToPgTypeText(oauthToken.RefreshToken)
-		data.OauthTokenType = dbutils.ToPgTypeText(oauthToken.TokenType)
-		data.OauthTokenExpiresAt = dbutils.ToPgTypeTimestamp(oauthToken.Expiry)
+		data.OauthAccessToken = database.ToPgTypeText(oauthToken.AccessToken)
+		data.OauthRefreshToken = database.ToPgTypeText(oauthToken.RefreshToken)
+		data.OauthTokenType = database.ToPgTypeText(oauthToken.TokenType)
+		data.OauthTokenExpiresAt = database.ToPgTypeTimestamp(oauthToken.Expiry)
 	}
 
 	data.OidcAud = claims.Audience
 	data.OidcIss = claims.Issuer
-	data.OidcIat = dbutils.ToPgTypeTimestamp(claims.IssuedAt)
+	data.OidcIat = database.ToPgTypeTimestamp(claims.IssuedAt)
 	data.OidcSub = claims.Sub
 	data.OidcEmail = claims.Email
-	data.OidcGivenName = dbutils.ToPgTypeText(claims.GivenName)
-	data.OidcFamilyName = dbutils.ToPgTypeText(claims.FamilyName)
-	data.OidcName = dbutils.ToPgTypeText(claims.Name)
-	data.OidcPicture = dbutils.ToPgTypeText(claims.Picture)
+	data.OidcGivenName = database.ToPgTypeText(claims.GivenName)
+	data.OidcFamilyName = database.ToPgTypeText(claims.FamilyName)
+	data.OidcName = database.ToPgTypeText(claims.Name)
+	data.OidcPicture = database.ToPgTypeText(claims.Picture)
 	data.UserFirstName = claims.GivenName
-	data.UserLastName = dbutils.ToPgTypeText(claims.FamilyName)
-	data.UserProfileImage = dbutils.ToPgTypeText(claims.Picture)
+	data.UserLastName = database.ToPgTypeText(claims.FamilyName)
+	data.UserProfileImage = database.ToPgTypeText(claims.Picture)
 
 	return data, nil
 }
