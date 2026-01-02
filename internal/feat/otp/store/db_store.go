@@ -22,9 +22,10 @@ func (s *dBStore) StoreOtp(ctx context.Context, otpHash string, purpose otpPurpo
 	otpId, err := s.db.Queries.OtpChallengeInsert(
 		ctx,
 		database_queries.OtpChallengeInsertParams{
-			OtpHash:   otpHash,
-			Channel:   channel.String(),
-			Purpose:   purpose.String(),
+			OtpHash: otpHash,
+			Channel: channel.String(),
+			Purpose: purpose.String(), 
+			Attempts: database.ToPgTypeInt4(1),
 			ExpiresAt: database.ToPgTypeTimestamptz(time.Now().Add(ExpiresAfter)),
 		},
 	)

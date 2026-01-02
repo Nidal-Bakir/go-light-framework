@@ -31,7 +31,8 @@ func (q *Queries) OtpChallengeDelete(ctx context.Context, id uuid.UUID) error {
 const otpChallengeGet = `-- name: OtpChallengeGet :one
 SELECT id, otp_hash, channel, attempts, purpose, created_at, updated_at, expires_at
 FROM otp_challenge
-WHERE id = $1
+WHERE id = $1 
+    AND expires_at < NOW()
 LIMIT 1
 `
 
@@ -40,6 +41,7 @@ LIMIT 1
 //	SELECT id, otp_hash, channel, attempts, purpose, created_at, updated_at, expires_at
 //	FROM otp_challenge
 //	WHERE id = $1
+//	    AND expires_at < NOW()
 //	LIMIT 1
 func (q *Queries) OtpChallengeGet(ctx context.Context, id uuid.UUID) (OtpChallenge, error) {
 	row := q.db.QueryRow(ctx, otpChallengeGet, id)
@@ -61,7 +63,8 @@ const otpChallengeIncAttempt = `-- name: OtpChallengeIncAttempt :one
 UPDATE otp_challenge
 SET attempts = attempts + $1
 WHERE id = $2 
- AND attempts <= $3
+ AND attempts < $3
+ AND expires_at < NOW()
 RETURNING attempts
 `
 
@@ -76,7 +79,8 @@ type OtpChallengeIncAttemptParams struct {
 //	UPDATE otp_challenge
 //	SET attempts = attempts + $1
 //	WHERE id = $2
-//	 AND attempts <= $3
+//	 AND attempts < $3
+//	 AND expires_at < NOW()
 //	RETURNING attempts
 func (q *Queries) OtpChallengeIncAttempt(ctx context.Context, arg OtpChallengeIncAttemptParams) (pgtype.Int4, error) {
 	row := q.db.QueryRow(ctx, otpChallengeIncAttempt, arg.Inc, arg.ID, arg.Attemptslimit)
@@ -88,6 +92,7 @@ func (q *Queries) OtpChallengeIncAttempt(ctx context.Context, arg OtpChallengeIn
 const otpChallengeInsert = `-- name: OtpChallengeInsert :one
 INSERT INTO otp_challenge (
     otp_hash,
+    attempts,
     channel,
     purpose,
     expires_at
@@ -96,13 +101,15 @@ VALUES (
     $1,
     $2,
     $3,
-    $4
+    $4,
+    $5
 )
 RETURNING id
 `
 
 type OtpChallengeInsertParams struct {
 	OtpHash   string             `json:"otp_hash"`
+	Attempts  pgtype.Int4        `json:"attempts"`
 	Channel   string             `json:"channel"`
 	Purpose   string             `json:"purpose"`
 	ExpiresAt pgtype.Timestamptz `json:"expires_at"`
@@ -112,6 +119,7 @@ type OtpChallengeInsertParams struct {
 //
 //	INSERT INTO otp_challenge (
 //	    otp_hash,
+//	    attempts,
 //	    channel,
 //	    purpose,
 //	    expires_at
@@ -120,12 +128,14 @@ type OtpChallengeInsertParams struct {
 //	    $1,
 //	    $2,
 //	    $3,
-//	    $4
+//	    $4,
+//	    $5
 //	)
 //	RETURNING id
 func (q *Queries) OtpChallengeInsert(ctx context.Context, arg OtpChallengeInsertParams) (uuid.UUID, error) {
 	row := q.db.QueryRow(ctx, otpChallengeInsert,
 		arg.OtpHash,
+		arg.Attempts,
 		arg.Channel,
 		arg.Purpose,
 		arg.ExpiresAt,

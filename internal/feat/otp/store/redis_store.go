@@ -36,7 +36,7 @@ func (s *redisStore) StoreOtp(ctx context.Context, otpHash string, purpose otpPu
 			Purpose:   purpose,
 			CreatedAt: time.Now(),
 			UpdatedAt: time.Now(),
-			Attempts:  0,
+			Attempts:  1,
 			ExpiresAt: time.Now().Add(ExpiresAfter),
 		}.toKeyValueSlice()...,
 	).Err()
@@ -62,20 +62,21 @@ var script = redis.NewScript(`
 local attempts = redis.call("HGET", KEYS[1], ARGV[1])
 
 if not attempts then
-   attempts = 0
-else
-   attempts = tonumber(attempts)
+    return {"ERROR", "FIELD_NOT_FOUND", KEYS[1], ARGV[1]}
 end
 
+attempts = tonumber(attempts)
 local max = tonumber(ARGV[2])
+local limit_reached = attempts >= max
 
-if attempts <= max then
-   return redis.call("HINCRBY", KEYS[1], ARGV[1], ARGV[3])
+if limit_reached
+	return {"OK", attempts, limit_reached}
 end
 
-local limit_reached = attempts > max
+local increment = tonumber(ARGV[3])
+attempts = redis.call("HINCRBY", KEYS[1], ARGV[1], increment)
 
-return { attempts, limit_reached }
+return {"OK", attempts, limit_reached}
 `)
 
 func (s *redisStore) IncrementAttemptCounter(ctx context.Context, id string, limit int) (attempts int, limitReached bool, err error) {
@@ -90,9 +91,22 @@ func (s *redisStore) IncrementAttemptCounter(ctx context.Context, id string, lim
 	if err != nil {
 		return -1, true, err
 	}
-	attempts = vals[0].(int)
-	limitReached = vals[1].(bool)
-	return int(attempts), limitReached, nil
+	status := vals[0].(string)
+
+	switch status {
+	case "ERROR":
+		errorStr := vals[1].(string)
+		if errorStr == "FIELD_NOT_FOUND" {
+			return 0, true, nil
+		}
+
+	case "OK":
+		attempts = vals[1].(int)
+		limitReached = vals[2].(bool)
+		return attempts, limitReached, nil
+	}
+
+	return 0, true, fmt.Errorf("luo status erorr")
 }
 
 func (s *redisStore) generateKey(id string) string {
