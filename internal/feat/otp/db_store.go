@@ -18,14 +18,14 @@ func NewDBStore(db *database.Service) StoreProvider {
 	return &dBStore{db}
 }
 
-func (s *dBStore) StoreOtp(ctx context.Context, otpHash string, purpose otpPurpose, channel otpChannel, ExpiresAfter time.Duration) (id string, err error) {
+func (s *dBStore) StoreOtp(ctx context.Context, otpHash string, purpose OtpPurpose, channel OtpChannel, ExpiresAfter time.Duration) (id string, err error) {
 	otpId, err := s.db.Queries.OtpChallengeInsert(
 		ctx,
 		database_queries.OtpChallengeInsertParams{
-			OtpHash: otpHash,
-			Channel: channel.String(),
-			Purpose: purpose.String(), 
-			Attempts: database.ToPgTypeInt4(1),
+			OtpHash:   otpHash,
+			Channel:   channel.String(),
+			Purpose:   purpose.String(),
+			Attempts:  database.ToPgTypeInt4(1),
 			ExpiresAt: database.ToPgTypeTimestamptz(time.Now().Add(ExpiresAfter)),
 		},
 	)
@@ -55,8 +55,8 @@ func otpStoreModelFromOtpChallengeDbModel(m database_queries.OtpChallenge) *OtpS
 		ID:        m.ID.String(),
 		OtpHash:   m.OtpHash,
 		Attempts:  int(m.Attempts.Int32),
-		Channel:   otpChannel(m.Channel),
-		Purpose:   otpPurpose(m.Purpose),
+		Channel:   OtpChannel(m.Channel),
+		Purpose:   OtpPurpose(m.Purpose),
 		ExpiresAt: m.ExpiresAt.Time,
 		CreatedAt: m.CreatedAt.Time,
 		UpdatedAt: m.UpdatedAt.Time,

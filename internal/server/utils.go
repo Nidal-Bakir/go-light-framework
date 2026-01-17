@@ -100,9 +100,12 @@ func StripBearerToken(tokenWithBearer string) string {
 }
 
 func assumablePhoneNumberFromRequest(r *http.Request) string {
-	sb := strings.Builder{}
 	countryCode := r.FormValue("country_code")
 	number := r.FormValue("phone_number")
+	if countryCode == "" || number == "" {
+		return ""
+	}
+	sb := strings.Builder{}
 	if countryCode[0] != '+' {
 		sb.WriteRune('+')
 	}

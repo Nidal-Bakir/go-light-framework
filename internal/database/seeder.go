@@ -5,6 +5,7 @@ import (
 	"context"
 	"slices"
 
+	"github.com/Nidal-Bakir/go-todo-backend/internal/appenv"
 	"github.com/Nidal-Bakir/go-todo-backend/internal/database/database_queries"
 	"github.com/Nidal-Bakir/go-todo-backend/internal/feat/perm/baseperm"
 	"github.com/Nidal-Bakir/go-todo-backend/internal/feat/settings/labels"
@@ -130,18 +131,39 @@ var v1_baseRollsAndPermission = seeder{
 
 var v2_settingsClientApiToken = seeder{
 	version: 2,
-	seederFn: func(ctx context.Context, dbTx database_queries.DBTX, queries *database_queries.Queries) error {
-		err := queries.SettingsCreateLabel(
-			ctx,
-			labels.ClientApiTokenWeb,
-		)
+	seederFn: func(ctx context.Context, dbTx database_queries.DBTX, queries *database_queries.Queries) (err error) {
+		if appenv.IsStagOrLocal() {
+			err = queries.SettingsSetSetting(
+				ctx,
+				database_queries.SettingsSetSettingParams{
+					Label: labels.ClientApiTokenWeb,
+					Value: ToPgTypeText("123"),
+				},
+			)
+		} else {
+			err = queries.SettingsCreateLabel(
+				ctx,
+				labels.ClientApiTokenWeb,
+			)
+		}
 		if err != nil {
 			return err
 		}
-		err = queries.SettingsCreateLabel(
-			ctx,
-			labels.ClientApiTokenMobile,
-		)
+
+		if appenv.IsStagOrLocal() {
+			err = queries.SettingsSetSetting(
+				ctx,
+				database_queries.SettingsSetSettingParams{
+					Label: labels.ClientApiTokenMobile,
+					Value: ToPgTypeText("123"),
+				},
+			)
+		} else {
+			err = queries.SettingsCreateLabel(
+				ctx,
+				labels.ClientApiTokenMobile,
+			)
+		}
 		if err != nil {
 			return err
 		}

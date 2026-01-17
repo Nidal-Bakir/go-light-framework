@@ -20,7 +20,7 @@ func NewRedisStore(redis *redis.Client) StoreProvider {
 	return &redisStore{redis}
 }
 
-func (s *redisStore) StoreOtp(ctx context.Context, otpHash string, purpose otpPurpose, channel otpChannel, ExpiresAfter time.Duration) (id string, err error) {
+func (s *redisStore) StoreOtp(ctx context.Context, otpHash string, purpose OtpPurpose, channel OtpChannel, ExpiresAfter time.Duration) (id string, err error) {
 	id = uuid.New().String()
 	err = s.redis.HSetEXWithArgs(
 		ctx,
@@ -129,8 +129,8 @@ func (m OtpStoreModel) toKeyValueSlice() []string {
 func (m *OtpStoreModel) fromMap(data map[string]string) *OtpStoreModel {
 	m.ID = data["id"]
 	m.OtpHash = data["otp_hash"]
-	m.Channel = otpChannel(data["channel"])
-	m.Purpose = otpPurpose(data["purpose"])
+	m.Channel = OtpChannel(data["channel"])
+	m.Purpose = OtpPurpose(data["purpose"])
 	m.Attempts = utils.Must(strconv.Atoi(data["attempts"]))
 	m.CreatedAt = utils.Must(time.Parse(time.RFC3339, data["created_at"]))
 	m.UpdatedAt = utils.Must(time.Parse(time.RFC3339, data["updated_at"]))

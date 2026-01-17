@@ -109,7 +109,7 @@ REDIS_CLI= redis-cli -h ${REDIS_ADDR} -p ${REDIS_PORT} --user ${REDIS_USERNAME} 
 redis-flushall:
 	@${REDIS_CLI} FLUSHALL
 
-fresh-server: goose-fresh redis-flushall
+fresh-server: goose-fresh redis-flushall sqlc-gen
 	@echo "Done"
 
 # Clean the binary

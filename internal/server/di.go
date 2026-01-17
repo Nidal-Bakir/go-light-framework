@@ -2,6 +2,7 @@ package server
 
 import (
 	"github.com/Nidal-Bakir/go-todo-backend/internal/feat/auth"
+	"github.com/Nidal-Bakir/go-todo-backend/internal/feat/otp"
 	"github.com/Nidal-Bakir/go-todo-backend/internal/feat/perm"
 	"github.com/Nidal-Bakir/go-todo-backend/internal/feat/settings"
 	"github.com/Nidal-Bakir/go-todo-backend/internal/utils/appjwt"
@@ -14,6 +15,8 @@ func (s *Server) NewAuthRepository() auth.Repository {
 		s.gatewaysProviderFactory,
 		password_hasher.NewPasswordHasher(password_hasher.BcryptPasswordHash), // changing this value will break the auth system
 		auth.NewAuthJWT(appjwt.NewAppJWT()),
+		otp.NewRedisStore(s.rdb),
+		otp.NewDBStore(s.db),
 	)
 }
 

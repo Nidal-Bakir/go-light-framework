@@ -9,8 +9,9 @@ import (
 	"github.com/Nidal-Bakir/go-todo-backend/internal/apperr"
 	"github.com/Nidal-Bakir/go-todo-backend/internal/database"
 	"github.com/Nidal-Bakir/go-todo-backend/internal/database/database_queries"
+
 	"github.com/Nidal-Bakir/go-todo-backend/internal/feat/auth/oauth/oidc"
-	otp "github.com/Nidal-Bakir/go-todo-backend/internal/feat/otp/sender"
+	"github.com/Nidal-Bakir/go-todo-backend/internal/feat/otp"
 	"github.com/Nidal-Bakir/go-todo-backend/internal/l10n"
 
 	"github.com/Nidal-Bakir/go-todo-backend/internal/gateway"
@@ -55,8 +56,22 @@ type Repository interface {
 	LoginOrCreateUserWithOidc(ctx context.Context, ipAddress netip.Addr, installation Installation, data LoginOrCreateUserWithOidcRepoParam) (user User, token string, err error)
 }
 
-func NewRepository(ds DataSource, gatewaysProviderFactory gateway.ProviderFactory, passwordHasher password_hasher.PasswordHasher, authJWT *AuthJWT) Repository {
-	return repositoryImpl{dataSource: ds, gatewaysProviderFactory: gatewaysProviderFactory, passwordHasher: passwordHasher, authJWT: authJWT}
+func NewRepository(
+	ds DataSource,
+	gatewaysProviderFactory gateway.ProviderFactory,
+	passwordHasher password_hasher.PasswordHasher,
+	authJWT *AuthJWT,
+	otpStoreProviderCache otp.StoreProvider,
+	otpStoreProviderDb otp.StoreProvider,
+) Repository {
+	return repositoryImpl{
+		dataSource:              ds,
+		gatewaysProviderFactory: gatewaysProviderFactory,
+		passwordHasher:          passwordHasher,
+		authJWT:                 authJWT,
+		otpStoreProviderCache:   otpStoreProviderCache,
+		otpStoreProviderDb:      otpStoreProviderDb,
+	}
 }
 
 // ---------------------------------------------------------------------------------
@@ -66,6 +81,8 @@ type repositoryImpl struct {
 	gatewaysProviderFactory gateway.ProviderFactory
 	passwordHasher          password_hasher.PasswordHasher
 	authJWT                 *AuthJWT
+	otpStoreProviderCache   otp.StoreProvider
+	otpStoreProviderDb      otp.StoreProvider
 }
 
 func (repo repositoryImpl) GetUserById(ctx context.Context, id int) (User, error) {
@@ -79,7 +96,7 @@ func (repo repositoryImpl) GetUserById(ctx context.Context, id int) (User, error
 	dbUser, err := repo.dataSource.GetUserById(ctx, userId)
 	if err != nil {
 		if !errors.Is(err, apperr.ErrNoResult) {
-			zlog.Err(err).Msg("error geting the user by user id")
+			zlog.Err(err).Msg("error getting the user by user id")
 		}
 		return User{}, err
 	}
@@ -105,7 +122,7 @@ func (repo repositoryImpl) GetUserAndSessionDataBySessionToken(ctx context.Conte
 	userAndSessionDataFromDB, err := repo.dataSource.GetUserAndSessionDataBySessionToken(ctx, sessionToken)
 	if err != nil {
 		if !errors.Is(err, apperr.ErrNoResult) {
-			zlog.Err(err).Msg("error geting the user by session token")
+			zlog.Err(err).Msg("error getting the user by session token")
 		}
 		return UserAndSession{}, err
 	}
@@ -129,16 +146,19 @@ func (repo repositoryImpl) CreateTempPasswordUser(ctx context.Context, tUser *Te
 		return tUser, err
 	}
 
-	sentOtp, err := sendOtpToTempUserForAccountVerification(
+	sentOtpId, err := sendOtp(
 		ctx,
 		repo.gatewaysProviderFactory,
+		repo.otpStoreProviderCache,
 		PasswordLoginAccessKey{LoginIdentityType: tUser.LoginIdentityType, Phone: tUser.Phone, Email: tUser.Email},
+		otp.AccountVerification,
+		ExpirationForTempUser,
 	)
 	if err != nil {
-		zlog.Err(err).Msg("error sending otp to temp user, for create account")
 		return tUser, err
 	}
-	tUser.SentOTP = sentOtp
+
+	tUser.OtpId = sentOtpId
 
 	err = repo.dataSource.StoreUserInTempCache(ctx, *tUser)
 	if err != nil {
@@ -191,70 +211,51 @@ func (repo repositoryImpl) isUsedCredentialsPasswordUser(ctx context.Context, tU
 	return resultError
 }
 
-func sendOtpToTempUserForAccountVerification(
+func sendOtp(
 	ctx context.Context,
 	gatewaysProviderFactory gateway.ProviderFactory,
+	otpStoreProvider otp.StoreProvider,
 	passwordLoginAccessKey PasswordLoginAccessKey,
-) (sentOTP string, err error) {
+	otpPurpose otp.OtpPurpose,
+	expiresAfter time.Duration,
+) (sentOtpId string, err error) {
 	otpSender := otp.NewSender(ctx, gatewaysProviderFactory, OtpCodeLength)
+	otpToSend := otpSender.GenRandOTP()
 
-	localizer := l10n.MustLocalizerFromContext(ctx)
+	var channel otp.OtpChannel
 	passwordLoginAccessKey.LoginIdentityType.Fold(
 		LoginIdentityFoldActions{
-			OnEmail: func() {
-				sentOTP, err = otpSender.SendOTP(
-					ctx,
-					otp.Options{
-						EmailTarget: passwordLoginAccessKey.Email,
-						Localizer:   localizer,
-						Purpose:     otp.AccountVerification,
-					})
-			},
-			OnPhone: func() {
-				sentOTP, err = otpSender.SendOTP(
-					ctx,
-					otp.Options{
-						PhoneTarget: passwordLoginAccessKey.Phone,
-						Localizer:   localizer,
-						Purpose:     otp.AccountVerification,
-					})
-			},
+			OnEmail: func() { channel = otp.EmailChannel },
+			OnPhone: func() { channel = otp.SMSChannel },
 		},
 	)
-	return sentOTP, err
-}
 
-func sendOtpToTempUserForForgetPassword(
-	ctx context.Context,
-	gatewaysProviderFactory gateway.ProviderFactory,
-	passwordLoginAccessKey PasswordLoginAccessKey,
-) (sentOTP string, err error) {
-	otpSender := otp.NewSender(ctx, gatewaysProviderFactory, OtpCodeLength)
+	zlog := zerolog.Ctx(ctx).With().Str("channel", channel.String()).Str("purpose", otpPurpose.String()).Logger()
+
+	sentOtpId, err = otpStoreProvider.StoreOtp(
+		ctx,
+		otp.HashOtp(otpToSend),
+		otpPurpose,
+		channel,
+		expiresAfter,
+	)
+	if err != nil {
+		zlog.Err(err).Msgf("error storing otp")
+		return "", err
+	}
 
 	localizer := l10n.MustLocalizerFromContext(ctx)
-	passwordLoginAccessKey.LoginIdentityType.Fold(
-		LoginIdentityFoldActions{
-			OnEmail: func() {
-				sentOTP, err = otpSender.SendOTP(
-					ctx,
-					otp.Options{
-						EmailTarget: passwordLoginAccessKey.Email,
-						Localizer:   localizer,
-						Purpose:     otp.ForgetPassword,
-					})
-			},
-			OnPhone: func() {
-				sentOTP, err = otpSender.SendOTP(
-					ctx,
-					otp.Options{
-						PhoneTarget: passwordLoginAccessKey.Phone,
-						Localizer:   localizer,
-						Purpose:     otp.ForgetPassword,
-					})
-			},
-		},
-	)
-	return sentOTP, err
+	err = otpSender.SendOTP(
+		ctx,
+		otp.Options{
+			EmailTarget: passwordLoginAccessKey.Email,
+			PhoneTarget: passwordLoginAccessKey.Phone,
+			Localizer:   localizer,
+			Purpose:     otpPurpose,
+			Otp:         otpToSend,
+		})
+
+	return sentOtpId, err
 }
 
 func (repo repositoryImpl) CreatePasswordUser(ctx context.Context, tempUserId uuid.UUID, providedOTP string) (User, error) {
@@ -266,7 +267,7 @@ func (repo repositoryImpl) CreatePasswordUser(ctx context.Context, tempUserId uu
 		return User{}, err
 	}
 
-	err = checkTempUserOTP(tUser, providedOTP)
+	err = repo.checkOtp(ctx, tUser.OtpId, providedOTP)
 	if err != nil {
 		return User{}, err
 	}
@@ -277,6 +278,7 @@ func (repo repositoryImpl) CreatePasswordUser(ctx context.Context, tempUserId uu
 	}
 
 	repo.deleteTempUserFromCache(ctx, tUser)
+	repo.otpStoreProviderCache.RemoveOtp(ctx, tUser.OtpId)
 
 	return user, err
 }
@@ -299,8 +301,12 @@ func (repo repositoryImpl) getTempUser(ctx context.Context, id uuid.UUID) (*Temp
 	return tUser, nil
 }
 
-func checkTempUserOTP(tUser *TempPasswordUser, providedOTP string) error {
-	if tUser.SentOTP != providedOTP {
+func (repo repositoryImpl) checkOtp(ctx context.Context, otpId string, providedOTP string) error {
+	storedOtpModel, err := repo.otpStoreProviderCache.GetOtp(ctx, otpId)
+	if err != nil {
+		return err
+	}
+	if storedOtpModel.OtpHash != otp.HashOtp(providedOTP) {
 		return apperr.ErrInvalidOtpCode
 	}
 	return nil
@@ -570,25 +576,27 @@ func (repo repositoryImpl) ForgetPassword(ctx context.Context, accessKey Passwor
 			// Security by obscurity
 			err = nil
 		} else {
-			zlog.Err(err).Msg("error geting the login option, for forget password")
+			zlog.Err(err).Msg("error getting the login option, for forget password")
 		}
 		return randomUUID, err
 	}
 
-	sentOtp, err := sendOtpToTempUserForForgetPassword(
+	sentOtpId, err := sendOtp(
 		ctx,
 		repo.gatewaysProviderFactory,
+		repo.otpStoreProviderCache,
 		PasswordLoginAccessKey{LoginIdentityType: accessKey.LoginIdentityType, Phone: accessKey.Phone, Email: accessKey.Email},
+		otp.ResetPassword,
+		ExpirationForForgetPasswordTempData,
 	)
 	if err != nil {
-		zlog.Err(err).Msg("error sending otp to user, for forget password")
 		return randomUUID, err
 	}
 
 	forgetPassData := ForgetPasswordTmpDataStore{
-		Id:      randomUUID,
-		UserId:  int(loginOption.UserID),
-		SentOTP: sentOtp,
+		Id:     randomUUID,
+		UserId: int(loginOption.UserID),
+		OtpId:  sentOtpId,
 	}
 
 	err = repo.dataSource.StoreForgetPasswordDataInTempCache(ctx, forgetPassData)
@@ -612,8 +620,9 @@ func (repo repositoryImpl) ResetPassword(ctx context.Context, id uuid.UUID, prov
 		return err
 	}
 
-	if forgetPassData.SentOTP != providedOTP {
-		return apperr.ErrInvalidOtpCode
+	err = repo.checkOtp(ctx, forgetPassData.OtpId, providedOTP)
+	if err != nil {
+		return err
 	}
 
 	err = repo.changePasswordForAllPasswordLoginIdentities(ctx, forgetPassData.UserId, "", newPassword, false)

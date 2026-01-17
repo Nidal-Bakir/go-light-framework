@@ -206,7 +206,7 @@ type TempPasswordUser struct {
 	Lname             string
 	Email             *email.Email
 	Phone             *phonenumber.PhoneNumber
-	SentOTP           string
+	OtpId             string
 	Password          string
 }
 
@@ -217,9 +217,17 @@ func (tu TempPasswordUser) ToMap() map[string]string {
 	m["login_identity_type"] = tu.LoginIdentityType.String()
 	m["f_name"] = tu.Fname
 	m["l_name"] = tu.Lname
-	m["email"] = tu.Email.String()
-	m["phone_number"] = tu.Phone.ToE164()
-	m["sent_otp"] = tu.SentOTP
+	tu.LoginIdentityType.Fold(
+		LoginIdentityFoldActions{
+			OnEmail: func() { m["email"] = tu.Email.String() },
+			OnPhone: func() {
+				if tu.Phone != nil {
+					m["phone_number"] = tu.Phone.ToE164()
+				}
+			},
+		},
+	)
+	m["otp_id"] = tu.OtpId
 	m["password"] = tu.Password
 	return m
 }
@@ -228,16 +236,15 @@ func (tu *TempPasswordUser) FromMap(m map[string]string) *TempPasswordUser {
 	tu.Id = uuid.MustParse(m["id"])
 	tu.Username = m["username"]
 	tu.LoginIdentityType = LoginIdentityType(m["login_identity_type"])
-	tu.LoginIdentityType.FoldOr(
+	tu.LoginIdentityType.Fold(
 		LoginIdentityFoldActions{
 			OnEmail: func() { tu.Email = email.New(m["email"]) },
 			OnPhone: func() { tu.Phone = phonenumber.MustParse(m["phone_number"]) },
 		},
-		func() {},
 	)
 	tu.Fname = m["f_name"]
 	tu.Lname = m["l_name"]
-	tu.SentOTP = m["sent_otp"]
+	tu.OtpId = m["otp_id"]
 	tu.Password = m["password"]
 	return tu
 }
@@ -350,22 +357,22 @@ func NewUserAndSessionFromDatabaseUserAndSessionRow(u database_queries.UsersGetU
 type ForgetPasswordTmpDataStore struct {
 	Id uuid.UUID // used as a key
 
-	UserId  int
-	SentOTP string
+	UserId int
+	OtpId  string
 }
 
 func (f ForgetPasswordTmpDataStore) ToMap() map[string]string {
 	m := make(map[string]string, 8)
 	m["id"] = f.Id.String()
 	m["user_id"] = strconv.Itoa(f.UserId)
-	m["sent_otp"] = f.SentOTP
+	m["otp_id"] = f.OtpId
 	return m
 }
 
 func (f *ForgetPasswordTmpDataStore) FromMap(m map[string]string) *ForgetPasswordTmpDataStore {
 	f.Id = uuid.MustParse(m["id"])
 	f.UserId = utils.Must(strconv.Atoi(m["user_id"]))
-	f.SentOTP = m["sent_otp"]
+	f.OtpId = m["otp_id"]
 	return f
 }
 

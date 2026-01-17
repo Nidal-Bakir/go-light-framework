@@ -24,7 +24,7 @@ type StoreProvider interface {
 	// Returns:
 	//   id: Unique identifier for this OTP entry; required for all subsequent operations
 	//   err: Storage error (nil if successful)
-	StoreOtp(ctx context.Context, otpHash string, purpose otpPurpose, channel otpChannel, ExpiresAfter time.Duration) (id string, err error)
+	StoreOtp(ctx context.Context, otpHash string, purpose OtpPurpose, channel OtpChannel, expiresAfter time.Duration) (id string, err error)
 
 	// GetOtp retrieves the complete OTP entry for the given ID.
 	// Returns nil if the entry doesn't exist or has expired.
@@ -58,33 +58,4 @@ type StoreProvider interface {
 	//   limitReached: True if attempt limit has been reached
 	//   err: Error if operation fails (nil for non-existent entries)
 	IncrementAttemptCounter(ctx context.Context, id string, limit int) (attempts int, limitReached bool, err error)
-}
-
-type otpChannel string
-type otpPurpose string
-
-const (
-	EmailChannel otpChannel = "email"
-	SMSChannel   otpChannel = "sms"
-
-	AccountVerification otpPurpose = "account_verification"
-	ResetPassword       otpPurpose = "reset_password"
-)
-
-func (c otpChannel) String() string {
-	return string(c)
-}
-func (o otpPurpose) String() string {
-	return string(o)
-}
-
-type OtpStoreModel struct {
-	ID        string
-	OtpHash   string
-	Purpose   otpPurpose
-	Channel   otpChannel
-	Attempts  int
-	CreatedAt time.Time
-	UpdatedAt time.Time
-	ExpiresAt time.Time
 }

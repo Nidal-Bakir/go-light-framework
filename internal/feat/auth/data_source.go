@@ -18,8 +18,8 @@ import (
 )
 
 const (
-	expirationForTempUser               = time.Minute * 30
-	expirationForForgetPasswordTempData = time.Minute * 15
+	ExpirationForTempUser               = time.Minute * 30
+	ExpirationForForgetPasswordTempData = time.Minute * 15
 )
 
 type DataSource interface {
@@ -111,7 +111,7 @@ func (ds dataSourceImpl) StoreUserInTempCache(ctx context.Context, tUser TempPas
 	pip := ds.redis.TxPipeline()
 	pip.Del(ctx, key)
 	pip.HSet(ctx, key, tUser.ToMap())
-	pip.Expire(ctx, key, expirationForTempUser)
+	pip.Expire(ctx, key, ExpirationForTempUser)
 	resultArray, err := pip.Exec(ctx)
 	if err != nil {
 		return err
@@ -422,7 +422,7 @@ func (ds dataSourceImpl) StoreForgetPasswordDataInTempCache(ctx context.Context,
 	pip := ds.redis.TxPipeline()
 	pip.Del(ctx, key)
 	pip.HSet(ctx, key, forgetPassData.ToMap())
-	pip.Expire(ctx, key, expirationForForgetPasswordTempData)
+	pip.Expire(ctx, key, ExpirationForForgetPasswordTempData)
 	resultArray, err := pip.Exec(ctx)
 
 	if err != nil {
