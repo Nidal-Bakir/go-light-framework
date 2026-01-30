@@ -23,15 +23,15 @@ func main() {
 	// Server run context
 	serverWithCancelCtx, serverStopCancelFunc := context.WithCancel(ctx)
 
-	server := server.NewServer(serverWithCancelCtx)
+	httpServer, appServer := server.NewServer(serverWithCancelCtx)
 
-	prepareForGracefulShutdown(server, serverWithCancelCtx, serverStopCancelFunc, zlog)
+	prepareForGracefulShutdown(httpServer, appServer, serverWithCancelCtx, serverStopCancelFunc, zlog)
 
-	zlog.Info().Msgf("Staring the server on: %s", server.Addr)
-	err := server.ListenAndServe()
+	zlog.Info().Msgf("Staring the server on: %s", httpServer.Addr)
+	err := httpServer.ListenAndServe()
 	if err != nil {
 		if errors.Is(err, http.ErrServerClosed) {
-			zlog.Info().Msg("Server Stopped Gracefully.")
+			zlog.Info().Msg("HTTP server stopped gracefully")
 		} else {
 			zlog.Fatal().Err(err).Msg("Can't start the server")
 		}
@@ -42,14 +42,20 @@ func main() {
 }
 
 // Listen for syscall signals for process to interrupt/quit
-func prepareForGracefulShutdown(server *http.Server, serverWithCancelCtx context.Context, serverStopCancelFunc context.CancelFunc, zlog *zerolog.Logger) {
+func prepareForGracefulShutdown(
+	httpServer *http.Server,
+	appServer *server.Server,
+	serverWithCancelCtx context.Context,
+	serverStopCancelFunc context.CancelFunc,
+	zlog *zerolog.Logger,
+) {
 	sig := make(chan os.Signal, 1)
 	signal.Notify(sig, syscall.SIGHUP, syscall.SIGINT, syscall.SIGTERM, syscall.SIGQUIT)
 	go func() {
 		<-sig
 
 		// Shutdown signal with grace period of 30 seconds
-		shutdownCtx, shutdownCancelFunc := context.WithTimeout(serverWithCancelCtx, 30*time.Second)
+		shutdownCtx, shutdownCancelFunc := context.WithTimeout(serverWithCancelCtx, time.Minute)
 		defer shutdownCancelFunc()
 
 		go func() {
@@ -60,10 +66,13 @@ func prepareForGracefulShutdown(server *http.Server, serverWithCancelCtx context
 		}()
 
 		// Trigger graceful shutdown
-		err := server.Shutdown(shutdownCtx)
+		zlog.Info().Msg("Shutting down HTTP server...")
+		err := httpServer.Shutdown(shutdownCtx)
 		if err != nil {
-			zlog.Fatal().Err(err).Msg("Error while shuting down the server.")
+			zlog.Fatal().Err(err).Msg("Error while shuting down the http server.")
 		}
+		appServer.Shutdown(shutdownCtx)
+		zlog.Info().Msg("All shutdown operations completed")
 
 		serverStopCancelFunc()
 	}()

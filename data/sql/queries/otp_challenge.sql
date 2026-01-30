@@ -35,3 +35,8 @@ RETURNING attempts;
 DELETE
 FROM otp_challenge
 WHERE id = @id;
+
+
+-- name: OtpChallengeDeleteExpiredRows :exec
+DELETE FROM otp_challenge
+WHERE expires_at <= NOW();

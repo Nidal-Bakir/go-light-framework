@@ -111,8 +111,9 @@ func (s *Service) Health(ctx context.Context) map[string]string {
 
 // Close closes the database connection.
 // It logs a message indicating the disconnection from the specific database.
-func (s *Service) Close() {
-	fmt.Printf("Disconnected from database: %s", database)
+func (s *Service) Close(ctx context.Context) {
+	zlog := *zerolog.Ctx(ctx)
+	zlog.Info().Msgf("Disconnected from database: %s", database)
 	s.ConnPool.Close()
 }
 

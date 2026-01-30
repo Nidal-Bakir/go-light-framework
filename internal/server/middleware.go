@@ -198,8 +198,6 @@ func ClientTokenChecker(settings settings.Repository) func(http.Handler) http.Ha
 				return
 			}
 			next.ServeHTTP(w, r)
-			return
-
 		}
 	}
 }

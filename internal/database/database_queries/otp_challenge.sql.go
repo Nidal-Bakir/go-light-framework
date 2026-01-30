@@ -28,6 +28,20 @@ func (q *Queries) OtpChallengeDelete(ctx context.Context, id uuid.UUID) error {
 	return err
 }
 
+const otpChallengeDeleteExpiredRows = `-- name: OtpChallengeDeleteExpiredRows :exec
+DELETE FROM otp_challenge
+WHERE expires_at <= NOW()
+`
+
+// OtpChallengeDeleteExpiredRows
+//
+//	DELETE FROM otp_challenge
+//	WHERE expires_at <= NOW()
+func (q *Queries) OtpChallengeDeleteExpiredRows(ctx context.Context) error {
+	_, err := q.db.Exec(ctx, otpChallengeDeleteExpiredRows)
+	return err
+}
+
 const otpChallengeGet = `-- name: OtpChallengeGet :one
 SELECT id, otp_hash, channel, attempts, purpose, created_at, updated_at, expires_at
 FROM otp_challenge

@@ -5,10 +5,12 @@ go 1.25.0
 require (
 	github.com/Nidal-Bakir/go-semver v1.1.0
 	github.com/Nidal-Bakir/username_r_gen/v2 v2.0.1
+	github.com/go-co-op/gocron/v2 v2.19.0
 	github.com/golang-jwt/jwt/v5 v5.3.0
 	github.com/google/uuid v1.6.0
 	github.com/jackc/pgx/v5 v5.7.5
 	github.com/nicksnyder/go-i18n/v2 v2.6.0
+	github.com/nyaruka/phonenumbers v1.6.7
 	github.com/pressly/goose/v3 v3.25.0
 	github.com/rs/cors v1.11.1
 	github.com/rs/zerolog v1.34.0
@@ -20,7 +22,8 @@ require (
 )
 
 require (
-	github.com/nyaruka/phonenumbers v1.6.7 // indirect
+	github.com/jonboulle/clockwork v0.5.0 // indirect
+	github.com/robfig/cron/v3 v3.0.1 // indirect
 	golang.org/x/exp v0.0.0-20250620022241-b7579e27df2b // indirect
 )
 
