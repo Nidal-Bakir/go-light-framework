@@ -9,8 +9,8 @@ import (
 )
 
 const (
-	loginSubject = "login"
-	userIdKey    = "user_id"
+	userIdKey         = "user_id"
+	sessionPurposeKey = "session_purpose"
 
 	installationSubject = "installation"
 	installationIdKey   = "installation_id"
@@ -27,23 +27,25 @@ func NewAuthJWT(appjwt *appjwt.AppJWT) *AuthJWT {
 // ---------------------------------------------------------------------
 
 type AuthClaims struct {
-	UserId int32
+	UserId         int32
+	SessionPurpose SessionPurpose
 	jwt.RegisteredClaims
 }
 
 func (a AuthClaims) toMap() map[string]string {
 	m := make(map[string]string)
 	m[userIdKey] = strconv.Itoa(int(a.UserId))
+	m[sessionPurposeKey] = a.SessionPurpose.String()
 	return m
 }
 
-func (authJWT AuthJWT) GenrateLoginToken(userId int32, expiresAt time.Time) (string, error) {
-	authClaims := AuthClaims{UserId: userId}
-	return authJWT.appjwt.GenWithClaims(expiresAt, authClaims.toMap(), loginSubject)
+func (authJWT AuthJWT) GenrateAuthToken(userId int32, expiresAt time.Time, sessionPurpose SessionPurpose) (string, error) {
+	authClaims := AuthClaims{UserId: userId, SessionPurpose: sessionPurpose}
+	return authJWT.appjwt.GenWithClaims(expiresAt, authClaims.toMap(), sessionPurpose.String())
 }
 
-func (authJWT AuthJWT) VerifyLoginToken(token string) (*AuthClaims, error) {
-	c, err := authJWT.appjwt.VerifyToken(token, loginSubject)
+func (authJWT AuthJWT) VerifyAuthToken(token string, sessionPurpose SessionPurpose) (*AuthClaims, error) {
+	c, err := authJWT.appjwt.VerifyToken(token, sessionPurpose.String())
 	if err != nil {
 		return nil, err
 	}
@@ -53,7 +55,12 @@ func (authJWT AuthJWT) VerifyLoginToken(token string) (*AuthClaims, error) {
 		return nil, err
 	}
 
-	return &AuthClaims{UserId: int32(userId), RegisteredClaims: c.RegisteredClaims}, nil
+	return &AuthClaims{
+			UserId:           int32(userId),
+			SessionPurpose:   SessionPurpose(c.Claims[sessionPurposeKey]),
+			RegisteredClaims: c.RegisteredClaims,
+		},
+		nil
 }
 
 // ---------------------------------------------------------------------

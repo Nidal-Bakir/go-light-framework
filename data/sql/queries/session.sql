@@ -4,9 +4,17 @@ INSERT INTO session (
         originated_from,
         used_installation,
         expires_at,
-        ip_address
+        ip_address,
+        purpose
     )
-VALUES ($1, $2, $3, $4, $5)
+VALUES (
+    @token::text,
+    @originated_from::int,
+    @used_installation::int,
+    @expires_at::timestamptz,
+    @ip_address::INET,
+    @purpose::text
+)
 RETURNING id;
 
 -- name: SessionGetActiveSessionById :one
@@ -21,16 +29,16 @@ FROM active_session
 WHERE token = $1
 LIMIT 1;
 
--- name: SessionSoftDeleteSession :exec
-UPDATE session
-SET deleted_at = NOW()
+-- name: SessionDeleteSession :exec
+DELETE FROM session
 WHERE id = $1;
 
+-- name: SessionDeleteAllActiveSessionsForUser :exec
+DELETE FROM session AS s
+USING active_login_identity AS li
+WHERE s.originated_from = li.id
+AND li.user_id = @user_id::int;
 
--- name: SessionSoftDeleteAllActiveSessionsForUser :exec
-UPDATE active_session AS s
-SET deleted_at = NOW()
-FROM active_login_identity AS li
-WHERE
-    s.originated_from = li.id
-    AND li.user_id    = $1;
+-- name: SessionDeleteExpiredRows :exec
+DELETE FROM active_session
+WHERE expires_at <= NOW();

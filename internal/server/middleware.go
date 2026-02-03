@@ -15,7 +15,7 @@ import (
 	"github.com/rs/zerolog"
 )
 
-func Auth(authRepo auth.Repository) func(http.Handler) http.HandlerFunc {
+func authBySessionPurpose(authRepo auth.Repository, sessionPurpose auth.SessionPurpose) func(http.Handler) http.HandlerFunc {
 	return func(next http.Handler) http.HandlerFunc {
 		return func(w http.ResponseWriter, r *http.Request) {
 			ctx := r.Context()
@@ -49,7 +49,8 @@ func Auth(authRepo auth.Repository) func(http.Handler) http.HandlerFunc {
 				return
 			}
 
-			if _, err := authRepo.VerifyLoginToken(token); err != nil {
+			authClaims, err := authRepo.VerifyAuthToken(token, sessionPurpose)
+			if err != nil {
 				if appenv.IsStagOrLocal() {
 					zlog.Error().Err(err).Msg("Error from jwt verify function")
 				}
@@ -57,7 +58,7 @@ func Auth(authRepo auth.Repository) func(http.Handler) http.HandlerFunc {
 				return
 			}
 
-			userAndSessionData, err := authRepo.GetUserAndSessionDataBySessionToken(ctx, token)
+			userAndSessionData, err := authRepo.GetUserAndSessionDataBySessionToken(ctx, token, authClaims.SessionPurpose)
 
 			if err != nil {
 				if errors.Is(err, apperr.ErrNoResult) {
@@ -85,6 +86,14 @@ func Auth(authRepo auth.Repository) func(http.Handler) http.HandlerFunc {
 			next.ServeHTTP(w, r.WithContext(ctx))
 		}
 	}
+}
+
+func Auth(authRepo auth.Repository) func(http.Handler) http.HandlerFunc {
+	return authBySessionPurpose(authRepo, auth.SessionPurposeLogin)
+}
+
+func AuthForMFA(authRepo auth.Repository) func(http.Handler) http.HandlerFunc {
+	return authBySessionPurpose(authRepo, auth.SessionPurposeMFA)
 }
 
 func (s *Server) LoggerInjector(h http.Handler) http.HandlerFunc {

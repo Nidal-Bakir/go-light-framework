@@ -115,7 +115,7 @@ type ActiveSession struct {
 	CreatedAt        pgtype.Timestamptz `json:"created_at"`
 	UpdatedAt        pgtype.Timestamptz `json:"updated_at"`
 	ExpiresAt        pgtype.Timestamptz `json:"expires_at"`
-	DeletedAt        pgtype.Timestamptz `json:"deleted_at"`
+	Purpose          string             `json:"purpose"`
 	OriginatedFrom   int32              `json:"originated_from"`
 	UsedInstallation int32              `json:"used_installation"`
 }
@@ -135,6 +135,15 @@ type ActiveUserIntegration struct {
 	CreatedAt          pgtype.Timestamptz `json:"created_at"`
 	UpdatedAt          pgtype.Timestamptz `json:"updated_at"`
 	DeletedAt          pgtype.Timestamptz `json:"deleted_at"`
+}
+
+type BackupCode struct {
+	ID        uuid.UUID          `json:"id"`
+	UserID    int32              `json:"user_id"`
+	CodeHash  string             `json:"code_hash"`
+	Used      pgtype.Bool        `json:"used"`
+	CreatedAt pgtype.Timestamptz `json:"created_at"`
+	UpdatedAt pgtype.Timestamptz `json:"updated_at"`
 }
 
 type GuestLoginIdentity struct {
@@ -173,6 +182,74 @@ type LoginIdentity struct {
 	CreatedAt    pgtype.Timestamptz `json:"created_at"`
 	UpdatedAt    pgtype.Timestamptz `json:"updated_at"`
 	DeletedAt    pgtype.Timestamptz `json:"deleted_at"`
+}
+
+type MfaMethod struct {
+	ID         int32              `json:"id"`
+	Status     string             `json:"status"`
+	MethodType string             `json:"method_type"`
+	UserID     int32              `json:"user_id"`
+	Label      string             `json:"label"`
+	CreatedAt  pgtype.Timestamptz `json:"created_at"`
+	UpdatedAt  pgtype.Timestamptz `json:"updated_at"`
+}
+
+type MfaMethodTypeEmail struct {
+	ID                    int32              `json:"id"`
+	OwnershipVerification pgtype.UUID        `json:"ownership_verification"`
+	Email                 string             `json:"email"`
+	CreatedAt             pgtype.Timestamptz `json:"created_at"`
+	UpdatedAt             pgtype.Timestamptz `json:"updated_at"`
+}
+
+type MfaMethodTypeHotp struct {
+	ID        int32              `json:"id"`
+	SecretKey string             `json:"secret_key"`
+	Algorithm string             `json:"algorithm"`
+	Digits    int32              `json:"digits"`
+	Issuer    string             `json:"issuer"`
+	Counter   int32              `json:"counter"`
+	CreatedAt pgtype.Timestamptz `json:"created_at"`
+	UpdatedAt pgtype.Timestamptz `json:"updated_at"`
+}
+
+type MfaMethodTypePhone struct {
+	ID                    int32              `json:"id"`
+	OwnershipVerification pgtype.UUID        `json:"ownership_verification"`
+	Phone                 string             `json:"phone"`
+	CreatedAt             pgtype.Timestamptz `json:"created_at"`
+	UpdatedAt             pgtype.Timestamptz `json:"updated_at"`
+}
+
+type MfaMethodTypeTotp struct {
+	ID          int32              `json:"id"`
+	SecretKey   string             `json:"secret_key"`
+	Algorithm   string             `json:"algorithm"`
+	Digits      int32              `json:"digits"`
+	Issuer      string             `json:"issuer"`
+	TimeStep    int32              `json:"time_step"`
+	InitialTime int32              `json:"initial_time"`
+	CreatedAt   pgtype.Timestamptz `json:"created_at"`
+	UpdatedAt   pgtype.Timestamptz `json:"updated_at"`
+}
+
+type MfaRememberedDevice struct {
+	ID                int32              `json:"id"`
+	UserID            int32              `json:"user_id"`
+	DeviceFingerprint string             `json:"device_fingerprint"`
+	CreatedAt         pgtype.Timestamptz `json:"created_at"`
+	UpdatedAt         pgtype.Timestamptz `json:"updated_at"`
+	ExpiresAt         pgtype.Timestamptz `json:"expires_at"`
+	LastUsed          pgtype.Timestamptz `json:"last_used"`
+}
+
+type MfaSession struct {
+	ID        uuid.UUID          `json:"id"`
+	UserID    int32              `json:"user_id"`
+	Purpose   string             `json:"purpose"`
+	ExpiresAt pgtype.Timestamptz `json:"expires_at"`
+	CreatedAt pgtype.Timestamptz `json:"created_at"`
+	UpdatedAt pgtype.Timestamptz `json:"updated_at"`
 }
 
 type NotDeletedInstallation struct {
@@ -296,6 +373,15 @@ type PasswordLoginIdentity struct {
 	DeletedAt       pgtype.Timestamptz `json:"deleted_at"`
 }
 
+type PendingMfaSession struct {
+	MfaSession   uuid.UUID          `json:"mfa_session"`
+	MfaMethod    int32              `json:"mfa_method"`
+	OtpChallenge pgtype.UUID        `json:"otp_challenge"`
+	ExpiresAt    pgtype.Timestamptz `json:"expires_at"`
+	CreatedAt    pgtype.Timestamptz `json:"created_at"`
+	UpdatedAt    pgtype.Timestamptz `json:"updated_at"`
+}
+
 type Permission struct {
 	Name      string             `json:"name"`
 	CreatedAt pgtype.Timestamptz `json:"created_at"`
@@ -330,7 +416,7 @@ type Session struct {
 	CreatedAt        pgtype.Timestamptz `json:"created_at"`
 	UpdatedAt        pgtype.Timestamptz `json:"updated_at"`
 	ExpiresAt        pgtype.Timestamptz `json:"expires_at"`
-	DeletedAt        pgtype.Timestamptz `json:"deleted_at"`
+	Purpose          string             `json:"purpose"`
 	OriginatedFrom   int32              `json:"originated_from"`
 	UsedInstallation int32              `json:"used_installation"`
 }

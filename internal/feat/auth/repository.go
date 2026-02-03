@@ -39,13 +39,13 @@ const (
 
 type Repository interface {
 	GetUserById(ctx context.Context, id int) (User, error)
-	GetUserAndSessionDataBySessionToken(ctx context.Context, sessionToken string) (UserAndSession, error)
+	GetUserAndSessionDataBySessionToken(ctx context.Context, sessionToken string, sessionPurpose SessionPurpose) (UserAndSession, error)
 	CreateTempPasswordUser(ctx context.Context, tUser *TempPasswordUser) (*TempPasswordUser, error)
 	CreatePasswordUser(ctx context.Context, tempUserId uuid.UUID, otp string) (User, error)
 	PasswordLogin(ctx context.Context, accessKey PasswordLoginAccessKey, password string, ipAddress netip.Addr, installation Installation) (user User, token string, err error)
 	GetInstallationUsingToken(ctx context.Context, installationToken string, attachedToSessionId *int32) (Installation, error)
 	ChangePasswordForAllPasswordLoginIdentities(ctx context.Context, userID int, oldPassword, newPassword string) error
-	VerifyLoginToken(token string) (*AuthClaims, error)
+	VerifyAuthToken(token string, sessionPurpose SessionPurpose) (*AuthClaims, error)
 	VerifyInstallationToken(token string) (*InstallationClaims, error)
 	CreateInstallation(ctx context.Context, data CreateInstallationData) (installationToken string, err error)
 	UpdateInstallation(ctx context.Context, installationToken string, data UpdateInstallationData) error
@@ -116,10 +116,10 @@ func (repo repositoryImpl) GetUserById(ctx context.Context, id int) (User, error
 	return user, nil
 }
 
-func (repo repositoryImpl) GetUserAndSessionDataBySessionToken(ctx context.Context, sessionToken string) (UserAndSession, error) {
+func (repo repositoryImpl) GetUserAndSessionDataBySessionToken(ctx context.Context, sessionToken string, sessionPurpose SessionPurpose) (UserAndSession, error) {
 	zlog := zerolog.Ctx(ctx)
 
-	userAndSessionDataFromDB, err := repo.dataSource.GetUserAndSessionDataBySessionToken(ctx, sessionToken)
+	userAndSessionDataFromDB, err := repo.dataSource.GetUserAndSessionDataBySessionToken(ctx, sessionToken, sessionPurpose)
 	if err != nil {
 		if !errors.Is(err, apperr.ErrNoResult) {
 			zlog.Err(err).Msg("error getting the user by session token")
@@ -447,7 +447,7 @@ func (repo repositoryImpl) PasswordLogin(
 func (repo repositoryImpl) generateAuthToken(ctx context.Context, userId int32) (token string, expiresAt time.Time, err error) {
 	zlog := zerolog.Ctx(ctx)
 	expiresAt = time.Now().Add(AuthTokenExpDuration)
-	token, err = repo.authJWT.GenrateLoginToken(userId, expiresAt)
+	token, err = repo.authJWT.GenrateAuthToken(userId, expiresAt, SessionPurposeLogin)
 	if err != nil {
 		zlog.Err(err).Msg("error while generating a new session token using jwt, for login")
 		return "", expiresAt, err
@@ -517,8 +517,8 @@ func (repo repositoryImpl) changePasswordForAllPasswordLoginIdentities(ctx conte
 	return nil
 }
 
-func (repo repositoryImpl) VerifyLoginToken(token string) (*AuthClaims, error) {
-	return repo.authJWT.VerifyLoginToken(token)
+func (repo repositoryImpl) VerifyAuthToken(token string, sessionPurpose SessionPurpose) (*AuthClaims, error) {
+	return repo.authJWT.VerifyAuthToken(token, sessionPurpose)
 }
 
 func (repo repositoryImpl) VerifyInstallationToken(token string) (*InstallationClaims, error) {

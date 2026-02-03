@@ -267,35 +267,6 @@ UPDATE login_identity SET
 last_used_at = NOW()
 WHERE id = @id;
 
-
--- WITH new_user AS (
---     INSERT INTO users (username, first_name)
---     VALUES (concat('guest_', gen_random_uuid()), 'Guest')
---     RETURNING id
--- ),
--- new_identity AS (
---     INSERT INTO login_identity (user_id)
---     SELECT id FROM new_user
---     RETURNING id, user_id
--- ),
--- new_guest AS (
---     INSERT INTO guest_login_option (login_identity_id, device_id)
---     SELECT id, $1 FROM new_identity
---     RETURNING login_identity_id
--- ),
--- new_session AS (
---     INSERT INTO session (token, originated_from, used_installation, expires_at)
---     VALUES (
---         $2,                        -- token
---         (SELECT login_identity_id FROM new_guest),
---         $3,                        -- installation_id
---         NOW() + INTERVAL '30 days' -- expires
---     )
---     RETURNING token
--- )
--- SELECT token FROM new_session;
-
-
 -- name: LoginIdentityCreateNewUserAndOIDCLoginIdentity :one
 WITH new_user AS (
   INSERT INTO users (

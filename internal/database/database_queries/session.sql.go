@@ -18,9 +18,17 @@ INSERT INTO session (
         originated_from,
         used_installation,
         expires_at,
-        ip_address
+        ip_address,
+        purpose
     )
-VALUES ($1, $2, $3, $4, $5)
+VALUES (
+    $1::text,
+    $2::int,
+    $3::int,
+    $4::timestamptz,
+    $5::INET,
+    $6::text
+)
 RETURNING id
 `
 
@@ -30,6 +38,7 @@ type SessionCreateNewSessionParams struct {
 	UsedInstallation int32              `json:"used_installation"`
 	ExpiresAt        pgtype.Timestamptz `json:"expires_at"`
 	IpAddress        netip.Addr         `json:"ip_address"`
+	Purpose          string             `json:"purpose"`
 }
 
 // SessionCreateNewSession
@@ -39,9 +48,17 @@ type SessionCreateNewSessionParams struct {
 //	        originated_from,
 //	        used_installation,
 //	        expires_at,
-//	        ip_address
+//	        ip_address,
+//	        purpose
 //	    )
-//	VALUES ($1, $2, $3, $4, $5)
+//	VALUES (
+//	    $1::text,
+//	    $2::int,
+//	    $3::int,
+//	    $4::timestamptz,
+//	    $5::INET,
+//	    $6::text
+//	)
 //	RETURNING id
 func (q *Queries) SessionCreateNewSession(ctx context.Context, arg SessionCreateNewSessionParams) (int32, error) {
 	row := q.db.QueryRow(ctx, sessionCreateNewSession,
@@ -50,14 +67,61 @@ func (q *Queries) SessionCreateNewSession(ctx context.Context, arg SessionCreate
 		arg.UsedInstallation,
 		arg.ExpiresAt,
 		arg.IpAddress,
+		arg.Purpose,
 	)
 	var id int32
 	err := row.Scan(&id)
 	return id, err
 }
 
+const sessionDeleteAllActiveSessionsForUser = `-- name: SessionDeleteAllActiveSessionsForUser :exec
+DELETE FROM session AS s
+USING active_login_identity AS li
+WHERE s.originated_from = li.id
+AND li.user_id = $1::int
+`
+
+// SessionDeleteAllActiveSessionsForUser
+//
+//	DELETE FROM session AS s
+//	USING active_login_identity AS li
+//	WHERE s.originated_from = li.id
+//	AND li.user_id = $1::int
+func (q *Queries) SessionDeleteAllActiveSessionsForUser(ctx context.Context, userID int32) error {
+	_, err := q.db.Exec(ctx, sessionDeleteAllActiveSessionsForUser, userID)
+	return err
+}
+
+const sessionDeleteExpiredRows = `-- name: SessionDeleteExpiredRows :exec
+DELETE FROM active_session
+WHERE expires_at <= NOW()
+`
+
+// SessionDeleteExpiredRows
+//
+//	DELETE FROM active_session
+//	WHERE expires_at <= NOW()
+func (q *Queries) SessionDeleteExpiredRows(ctx context.Context) error {
+	_, err := q.db.Exec(ctx, sessionDeleteExpiredRows)
+	return err
+}
+
+const sessionDeleteSession = `-- name: SessionDeleteSession :exec
+DELETE FROM session
+WHERE id = $1
+`
+
+// SessionDeleteSession
+//
+//	DELETE FROM session
+//	WHERE id = $1
+func (q *Queries) SessionDeleteSession(ctx context.Context, id int32) error {
+	_, err := q.db.Exec(ctx, sessionDeleteSession, id)
+	return err
+}
+
 const sessionGetActiveSessionById = `-- name: SessionGetActiveSessionById :one
-SELECT id, token, ip_address, created_at, updated_at, expires_at, deleted_at, originated_from, used_installation
+SELECT id, token, ip_address, created_at, updated_at, expires_at, purpose, originated_from, used_installation
 FROM active_session
 WHERE id = $1
 LIMIT 1
@@ -65,7 +129,7 @@ LIMIT 1
 
 // SessionGetActiveSessionById
 //
-//	SELECT id, token, ip_address, created_at, updated_at, expires_at, deleted_at, originated_from, used_installation
+//	SELECT id, token, ip_address, created_at, updated_at, expires_at, purpose, originated_from, used_installation
 //	FROM active_session
 //	WHERE id = $1
 //	LIMIT 1
@@ -79,7 +143,7 @@ func (q *Queries) SessionGetActiveSessionById(ctx context.Context, id int32) (Ac
 		&i.CreatedAt,
 		&i.UpdatedAt,
 		&i.ExpiresAt,
-		&i.DeletedAt,
+		&i.Purpose,
 		&i.OriginatedFrom,
 		&i.UsedInstallation,
 	)
@@ -87,7 +151,7 @@ func (q *Queries) SessionGetActiveSessionById(ctx context.Context, id int32) (Ac
 }
 
 const sessionGetActiveSessionByToken = `-- name: SessionGetActiveSessionByToken :one
-SELECT id, token, ip_address, created_at, updated_at, expires_at, deleted_at, originated_from, used_installation
+SELECT id, token, ip_address, created_at, updated_at, expires_at, purpose, originated_from, used_installation
 FROM active_session
 WHERE token = $1
 LIMIT 1
@@ -95,7 +159,7 @@ LIMIT 1
 
 // SessionGetActiveSessionByToken
 //
-//	SELECT id, token, ip_address, created_at, updated_at, expires_at, deleted_at, originated_from, used_installation
+//	SELECT id, token, ip_address, created_at, updated_at, expires_at, purpose, originated_from, used_installation
 //	FROM active_session
 //	WHERE token = $1
 //	LIMIT 1
@@ -109,47 +173,9 @@ func (q *Queries) SessionGetActiveSessionByToken(ctx context.Context, token stri
 		&i.CreatedAt,
 		&i.UpdatedAt,
 		&i.ExpiresAt,
-		&i.DeletedAt,
+		&i.Purpose,
 		&i.OriginatedFrom,
 		&i.UsedInstallation,
 	)
 	return i, err
-}
-
-const sessionSoftDeleteAllActiveSessionsForUser = `-- name: SessionSoftDeleteAllActiveSessionsForUser :exec
-UPDATE active_session AS s
-SET deleted_at = NOW()
-FROM active_login_identity AS li
-WHERE
-    s.originated_from = li.id
-    AND li.user_id    = $1
-`
-
-// SessionSoftDeleteAllActiveSessionsForUser
-//
-//	UPDATE active_session AS s
-//	SET deleted_at = NOW()
-//	FROM active_login_identity AS li
-//	WHERE
-//	    s.originated_from = li.id
-//	    AND li.user_id    = $1
-func (q *Queries) SessionSoftDeleteAllActiveSessionsForUser(ctx context.Context, userID int32) error {
-	_, err := q.db.Exec(ctx, sessionSoftDeleteAllActiveSessionsForUser, userID)
-	return err
-}
-
-const sessionSoftDeleteSession = `-- name: SessionSoftDeleteSession :exec
-UPDATE session
-SET deleted_at = NOW()
-WHERE id = $1
-`
-
-// SessionSoftDeleteSession
-//
-//	UPDATE session
-//	SET deleted_at = NOW()
-//	WHERE id = $1
-func (q *Queries) SessionSoftDeleteSession(ctx context.Context, id int32) error {
-	_, err := q.db.Exec(ctx, sessionSoftDeleteSession, id)
-	return err
 }

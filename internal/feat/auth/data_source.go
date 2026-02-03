@@ -27,7 +27,7 @@ type DataSource interface {
 
 	GetUserById(ctx context.Context, id int32) (database_queries.UsersGetUserByIdRow, error)
 
-	GetUserAndSessionDataBySessionToken(ctx context.Context, sessionToken string) (database_queries.UsersGetUserAndSessionDataBySessionTokenRow, error)
+	GetUserAndSessionDataBySessionToken(ctx context.Context, sessionToken string, sessionPurpose SessionPurpose) (database_queries.UsersGetUserAndSessionDataBySessionTokenRow, error)
 
 	GetUserFromTempCache(ctx context.Context, tempUserId uuid.UUID) (*TempPasswordUser, error)
 	GetForgetPasswordDataFromTempCache(ctx context.Context, dataId uuid.UUID) (*ForgetPasswordTmpDataStore, error)
@@ -89,8 +89,14 @@ func (ds dataSourceImpl) GetUserById(ctx context.Context, id int32) (database_qu
 	return dbUser, nil
 }
 
-func (ds dataSourceImpl) GetUserAndSessionDataBySessionToken(ctx context.Context, sessionToken string) (database_queries.UsersGetUserAndSessionDataBySessionTokenRow, error) {
-	userWithSessionData, err := ds.db.Queries.UsersGetUserAndSessionDataBySessionToken(ctx, sessionToken)
+func (ds dataSourceImpl) GetUserAndSessionDataBySessionToken(ctx context.Context, sessionToken string, sessionPurpose SessionPurpose) (database_queries.UsersGetUserAndSessionDataBySessionTokenRow, error) {
+	userWithSessionData, err := ds.db.Queries.UsersGetUserAndSessionDataBySessionToken(
+		ctx,
+		database_queries.UsersGetUserAndSessionDataBySessionTokenParams{
+			Token:        sessionToken,
+			TokenPurpose: sessionPurpose.String(),
+		},
+	)
 	if err != nil {
 		if database.IsErrPgxNoRows(err) {
 			return userWithSessionData, apperr.ErrNoResult
@@ -268,6 +274,7 @@ func (ds dataSourceImpl) createNewSessionAndAttachUserToInstallation(
 			UsedInstallation: installationId,
 			ExpiresAt:        pgtype.Timestamptz{Time: expiresAt, Valid: true},
 			IpAddress:        ipAddress,
+			Purpose:          SessionPurposeLogin.String(),
 		},
 	)
 	if err != nil {
@@ -463,7 +470,7 @@ func (ds dataSourceImpl) ExpTokenAndUnlinkFromInstallation(ctx context.Context, 
 		ctx,
 		ds.db,
 		func(queries *database_queries.Queries) error {
-			err = queries.SessionSoftDeleteSession(ctx, int32(tokenId))
+			err = queries.SessionDeleteSession(ctx, int32(tokenId))
 			if err != nil {
 				return err
 			}
@@ -493,12 +500,10 @@ func (ds dataSourceImpl) ExpAllTokensAndUnlinkThemFromInstallation(ctx context.C
 			if err != nil {
 				return err
 			}
-
-			err = queries.SessionSoftDeleteAllActiveSessionsForUser(ctx, int32(userId))
+			err = queries.SessionDeleteAllActiveSessionsForUser(ctx, int32(userId))
 			if err != nil {
 				return err
 			}
-
 			return nil
 		},
 	)

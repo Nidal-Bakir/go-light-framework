@@ -73,6 +73,7 @@ SELECT s.id as session_id,
     s.token as session_token,
     s.originated_from as session_originated_from,
     s.used_installation as session_used_installation,
+    s.purpose as session_purpose,
 
     u.id as user_id,
     u.username as user_username,
@@ -86,15 +87,23 @@ SELECT s.id as session_id,
 FROM active_session AS s
     JOIN active_login_identity AS li ON s.originated_from = li.id
     JOIN not_deleted_users AS u ON u.id = li.user_id
-WHERE s.token = $1
+WHERE 
+    s.token = $1::text AND
+    s.purpose = $2::text
 LIMIT 1
 `
+
+type UsersGetUserAndSessionDataBySessionTokenParams struct {
+	Token        string `json:"token"`
+	TokenPurpose string `json:"token_purpose"`
+}
 
 type UsersGetUserAndSessionDataBySessionTokenRow struct {
 	SessionID               int32              `json:"session_id"`
 	SessionToken            string             `json:"session_token"`
 	SessionOriginatedFrom   int32              `json:"session_originated_from"`
 	SessionUsedInstallation int32              `json:"session_used_installation"`
+	SessionPurpose          string             `json:"session_purpose"`
 	UserID                  int32              `json:"user_id"`
 	UserUsername            string             `json:"user_username"`
 	UserProfileImage        pgtype.Text        `json:"user_profile_image"`
@@ -112,6 +121,7 @@ type UsersGetUserAndSessionDataBySessionTokenRow struct {
 //	    s.token as session_token,
 //	    s.originated_from as session_originated_from,
 //	    s.used_installation as session_used_installation,
+//	    s.purpose as session_purpose,
 //
 //	    u.id as user_id,
 //	    u.username as user_username,
@@ -125,16 +135,19 @@ type UsersGetUserAndSessionDataBySessionTokenRow struct {
 //	FROM active_session AS s
 //	    JOIN active_login_identity AS li ON s.originated_from = li.id
 //	    JOIN not_deleted_users AS u ON u.id = li.user_id
-//	WHERE s.token = $1
+//	WHERE
+//	    s.token = $1::text AND
+//	    s.purpose = $2::text
 //	LIMIT 1
-func (q *Queries) UsersGetUserAndSessionDataBySessionToken(ctx context.Context, token string) (UsersGetUserAndSessionDataBySessionTokenRow, error) {
-	row := q.db.QueryRow(ctx, usersGetUserAndSessionDataBySessionToken, token)
+func (q *Queries) UsersGetUserAndSessionDataBySessionToken(ctx context.Context, arg UsersGetUserAndSessionDataBySessionTokenParams) (UsersGetUserAndSessionDataBySessionTokenRow, error) {
+	row := q.db.QueryRow(ctx, usersGetUserAndSessionDataBySessionToken, arg.Token, arg.TokenPurpose)
 	var i UsersGetUserAndSessionDataBySessionTokenRow
 	err := row.Scan(
 		&i.SessionID,
 		&i.SessionToken,
 		&i.SessionOriginatedFrom,
 		&i.SessionUsedInstallation,
+		&i.SessionPurpose,
 		&i.UserID,
 		&i.UserUsername,
 		&i.UserProfileImage,

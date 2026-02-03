@@ -21,6 +21,7 @@ SELECT s.id as session_id,
     s.token as session_token,
     s.originated_from as session_originated_from,
     s.used_installation as session_used_installation,
+    s.purpose as session_purpose,
 
     u.id as user_id,
     u.username as user_username,
@@ -34,7 +35,9 @@ SELECT s.id as session_id,
 FROM active_session AS s
     JOIN active_login_identity AS li ON s.originated_from = li.id
     JOIN not_deleted_users AS u ON u.id = li.user_id
-WHERE s.token = $1
+WHERE 
+    s.token = @token::text AND
+    s.purpose = @token_purpose::text
 LIMIT 1;
 
 -- name: UsersIsUsernameUsed :one

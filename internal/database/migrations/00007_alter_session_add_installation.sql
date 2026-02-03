@@ -7,8 +7,7 @@ SELECT
 FROM
     session
 WHERE
-    expires_at > NOW ()
-    AND deleted_at IS NULL;
+    expires_at > NOW ();
 
 -- +goose Down
 DROP VIEW active_session;

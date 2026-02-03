@@ -18,6 +18,17 @@ import (
 	"github.com/jackc/pgx/v5/pgtype"
 )
 
+type SessionPurpose string
+
+const (
+	SessionPurposeLogin SessionPurpose = "login"
+	SessionPurposeMFA   SessionPurpose = "mfa"
+)
+
+func (s SessionPurpose) String() string {
+	return string(s)
+}
+
 type LoginIdentityType string
 
 const (
@@ -333,6 +344,7 @@ type UserAndSession struct {
 	SessionDeletedAt        pgtype.Timestamptz `json:"session_deleted_at"`
 	SessionOriginatedFrom   int32              `json:"session_originated_from"`
 	SessionUsedInstallation int32              `json:"session_used_installation"`
+	SessionPurpose          SessionPurpose     `json:"-"`
 }
 
 func NewUserAndSessionFromDatabaseUserAndSessionRow(u database_queries.UsersGetUserAndSessionDataBySessionTokenRow) UserAndSession {
@@ -351,6 +363,7 @@ func NewUserAndSessionFromDatabaseUserAndSessionRow(u database_queries.UsersGetU
 		SessionToken:            u.SessionToken,
 		SessionOriginatedFrom:   u.SessionOriginatedFrom,
 		SessionUsedInstallation: u.SessionUsedInstallation,
+		SessionPurpose:          SessionPurpose(u.SessionPurpose),
 	}
 }
 
