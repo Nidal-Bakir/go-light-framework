@@ -25,3 +25,4 @@ VALUES (
     @email::text
 )
 RETURNING id;
+

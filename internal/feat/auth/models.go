@@ -29,6 +29,30 @@ func (s SessionPurpose) String() string {
 	return string(s)
 }
 
+type MfaSessionPurpose string
+
+const (
+	MfaSessionPurposeLogin          MfaSessionPurpose = "login"
+	MfaSessionPurposeUpdatePassword MfaSessionPurpose = "update_password"
+)
+
+func (s MfaSessionPurpose) String() string {
+	return string(s)
+}
+
+type MfaStatus string
+
+const (
+	MfaStatusPending  MfaStatus = "pending"
+	MfaStatusVerified MfaStatus = "verified"
+	MfaStatusDisabled MfaStatus = "disabled"
+	MfaStatusRevoked  MfaStatus = "revoked"
+)
+
+func (s MfaStatus) String() string {
+	return string(s)
+}
+
 type LoginIdentityType string
 
 const (

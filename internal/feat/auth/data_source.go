@@ -67,6 +67,23 @@ type DataSource interface {
 	// Delete ---
 	DeleteUserFromTempCache(ctx context.Context, tempUserId uuid.UUID) error
 	DeleteForgetPasswordDataFromTempCache(ctx context.Context, dataId uuid.UUID) error
+
+	// mfa
+	IsMfaEnabledForUser(ctx context.Context, userId int) (bool, error)
+	CreateEmailMfa(ctx context.Context, userId int, email email.Email, ownershipVerificationId string) (int, error)
+	CreatePhoneMfa(ctx context.Context, userId int, phone phonenumber.PhoneNumber, ownershipVerificationId string) (int, error)
+	GetMfaMethod(ctx context.Context, mfaId int) (any, error)
+	ChangeMfaMethodStatus(ctx context.Context, mfaId int, newStatus MfaStatus) (any, error)
+	GetAllMfaMethodsForUser(ctx context.Context, userId int) ([]any, error)
+
+	StartMfaSession(ctx context.Context, userId int, purpose MfaSessionPurpose, expiresAt time.Time)
+	AddPendingMfaSession(ctx context.Context, mfaSessionId uuid.UUID, mfaMethodId int, expiresAt time.Time, otpChallenge uuid.UUID)
+
+	UseBackupCode(ctx context.Context, userId int, codeHash string) error
+	GenerateNewBackupCodes(ctx context.Context, userId int, hashedCodes []string) error
+
+	IsRememberedDevice(ctx context.Context, userId int, deviceFingerprint string) (bool, error)
+	RememberedDevice(ctx context.Context, userId int, deviceFingerprint string, expiresAt time.Time) (bool, error)
 }
 
 type dataSourceImpl struct {

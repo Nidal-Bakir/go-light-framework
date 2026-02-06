@@ -20,14 +20,16 @@ func authBySessionPurpose(authRepo auth.Repository, sessionPurpose auth.SessionP
 		return func(w http.ResponseWriter, r *http.Request) {
 			ctx := r.Context()
 
-			// Skip re-injecting Auth middleware if user/session info already exists in the context
-			_, ok := auth.UserAndSessionFromContext(ctx)
+			// Skip re-injecting Auth middleware if user/session(with sessionPurpose) info already exists in the context
+			userFromParent, ok := auth.UserAndSessionFromContext(ctx)
 			if ok {
-				next.ServeHTTP(w, r)
-				return
+				if userFromParent.SessionPurpose == sessionPurpose {
+					next.ServeHTTP(w, r)
+					return
+				}
 			}
 
-			zlog := zerolog.Ctx(ctx)
+			zlog := zerolog.Ctx(ctx).With().Str("session_purpose", sessionPurpose.String()).Logger()
 
 			sendUnauthorizedError := func() {
 				writeError(ctx, w, r, http.StatusUnauthorized, fmt.Errorf("unauthorized"))
@@ -59,7 +61,6 @@ func authBySessionPurpose(authRepo auth.Repository, sessionPurpose auth.SessionP
 			}
 
 			userAndSessionData, err := authRepo.GetUserAndSessionDataBySessionToken(ctx, token, authClaims.SessionPurpose)
-
 			if err != nil {
 				if errors.Is(err, apperr.ErrNoResult) {
 					err = fmt.Errorf("unauthorized")

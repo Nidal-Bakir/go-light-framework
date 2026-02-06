@@ -234,7 +234,7 @@ type MfaMethodTypeTotp struct {
 }
 
 type MfaRememberedDevice struct {
-	ID                int32              `json:"id"`
+	ID                uuid.UUID          `json:"id"`
 	UserID            int32              `json:"user_id"`
 	DeviceFingerprint string             `json:"device_fingerprint"`
 	CreatedAt         pgtype.Timestamptz `json:"created_at"`

@@ -87,7 +87,7 @@ CREATE TABLE backup_codes (
 );
 
 CREATE TABLE mfa_remembered_devices (
-  id SERIAL PRIMARY KEY NOT NULL,
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
   device_fingerprint text NOT NULL,
   created_at TIMESTAMPTZ DEFAULT now() NOT NULL,
