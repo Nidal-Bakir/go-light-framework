@@ -12,33 +12,141 @@ import (
 	"github.com/jackc/pgx/v5/pgtype"
 )
 
+const mfaAddPendingMfaSession = `-- name: MfaAddPendingMfaSession :exec
+INSERT INTO
+  pending_mfa_session (
+    mfa_session,
+    mfa_method,
+    otp_challenge,
+    expires_at
+  )
+VALUES
+  (
+    $1::UUID,
+    $2::INT,
+    $3::UUID,
+    $4::TIMESTAMPTZ
+  )
+RETURNING
+  mfa_session
+`
+
+type MfaAddPendingMfaSessionParams struct {
+	MfaSession   uuid.UUID          `json:"mfa_session"`
+	MfaMethod    int32              `json:"mfa_method"`
+	OtpChallenge pgtype.UUID        `json:"otp_challenge"`
+	ExpiresAt    pgtype.Timestamptz `json:"expires_at"`
+}
+
+// MfaAddPendingMfaSession
+//
+//	INSERT INTO
+//	  pending_mfa_session (
+//	    mfa_session,
+//	    mfa_method,
+//	    otp_challenge,
+//	    expires_at
+//	  )
+//	VALUES
+//	  (
+//	    $1::UUID,
+//	    $2::INT,
+//	    $3::UUID,
+//	    $4::TIMESTAMPTZ
+//	  )
+//	RETURNING
+//	  mfa_session
+func (q *Queries) MfaAddPendingMfaSession(ctx context.Context, arg MfaAddPendingMfaSessionParams) error {
+	_, err := q.db.Exec(ctx, mfaAddPendingMfaSession,
+		arg.MfaSession,
+		arg.MfaMethod,
+		arg.OtpChallenge,
+		arg.ExpiresAt,
+	)
+	return err
+}
+
+const mfaChangeMfaMethodStatus = `-- name: MfaChangeMfaMethodStatus :exec
+UPDATE mfa_method
+SET
+  status = $1::TEXT
+WHERE
+  id = $2::INT
+`
+
+type MfaChangeMfaMethodStatusParams struct {
+	NewStatus string `json:"new_status"`
+	ID        int32  `json:"id"`
+}
+
+// MfaChangeMfaMethodStatus
+//
+//	UPDATE mfa_method
+//	SET
+//	  status = $1::TEXT
+//	WHERE
+//	  id = $2::INT
+func (q *Queries) MfaChangeMfaMethodStatus(ctx context.Context, arg MfaChangeMfaMethodStatusParams) error {
+	_, err := q.db.Exec(ctx, mfaChangeMfaMethodStatus, arg.NewStatus, arg.ID)
+	return err
+}
+
+const mfaCountVerifiedMfaForUser = `-- name: MfaCountVerifiedMfaForUser :one
+SELECT
+  COUNT(*)
+FROM
+  mfa_method
+WHERE
+  user_id = $1
+  AND status = 'verified'
+`
+
+// MfaCountVerifiedMfaForUser
+//
+//	SELECT
+//	  COUNT(*)
+//	FROM
+//	  mfa_method
+//	WHERE
+//	  user_id = $1
+//	  AND status = 'verified'
+func (q *Queries) MfaCountVerifiedMfaForUser(ctx context.Context, userID int32) (int64, error) {
+	row := q.db.QueryRow(ctx, mfaCountVerifiedMfaForUser, userID)
+	var count int64
+	err := row.Scan(&count)
+	return count, err
+}
+
 const mfaCreateTypeEmail = `-- name: MfaCreateTypeEmail :one
-WITH new_mfa_method AS(
-    INSERT INTO mfa_method (
-        status,
-        method_type,
-        user_id,
-        label
-        )
-    VALUES (
+WITH
+  new_mfa_method AS (
+    INSERT INTO
+      mfa_method (status, method_type, user_id, label)
+    VALUES
+      (
         'pending',
         'email',
-        $3::int,
-        $4::text
-    )
-    RETURNING id
-)
-INSERT INTO mfa_method_type_email (
-    id,
-    ownership_verification,
-    email
-    )
-VALUES (
-    (SELECT id from new_mfa_method),
-    $1::uuid,
-    $2::text
-)
-RETURNING id
+        $3::INT,
+        $4::TEXT
+      )
+    RETURNING
+      id
+  )
+INSERT INTO
+  mfa_method_type_email (id, ownership_verification, email)
+VALUES
+  (
+    (
+      SELECT
+        id
+      FROM
+        new_mfa_method
+    ),
+    $1::UUID,
+    $2::TEXT
+  )
+RETURNING
+  id
 `
 
 type MfaCreateTypeEmailParams struct {
@@ -50,32 +158,35 @@ type MfaCreateTypeEmailParams struct {
 
 // MfaCreateTypeEmail
 //
-//	WITH new_mfa_method AS(
-//	    INSERT INTO mfa_method (
-//	        status,
-//	        method_type,
-//	        user_id,
-//	        label
-//	        )
-//	    VALUES (
+//	WITH
+//	  new_mfa_method AS (
+//	    INSERT INTO
+//	      mfa_method (status, method_type, user_id, label)
+//	    VALUES
+//	      (
 //	        'pending',
 //	        'email',
-//	        $3::int,
-//	        $4::text
-//	    )
-//	    RETURNING id
-//	)
-//	INSERT INTO mfa_method_type_email (
-//	    id,
-//	    ownership_verification,
-//	    email
-//	    )
-//	VALUES (
-//	    (SELECT id from new_mfa_method),
-//	    $1::uuid,
-//	    $2::text
-//	)
-//	RETURNING id
+//	        $3::INT,
+//	        $4::TEXT
+//	      )
+//	    RETURNING
+//	      id
+//	  )
+//	INSERT INTO
+//	  mfa_method_type_email (id, ownership_verification, email)
+//	VALUES
+//	  (
+//	    (
+//	      SELECT
+//	        id
+//	      FROM
+//	        new_mfa_method
+//	    ),
+//	    $1::UUID,
+//	    $2::TEXT
+//	  )
+//	RETURNING
+//	  id
 func (q *Queries) MfaCreateTypeEmail(ctx context.Context, arg MfaCreateTypeEmailParams) (int32, error) {
 	row := q.db.QueryRow(ctx, mfaCreateTypeEmail,
 		arg.OwnershipVerification,
@@ -86,4 +197,513 @@ func (q *Queries) MfaCreateTypeEmail(ctx context.Context, arg MfaCreateTypeEmail
 	var id int32
 	err := row.Scan(&id)
 	return id, err
+}
+
+const mfaCreateTypePhone = `-- name: MfaCreateTypePhone :one
+WITH
+  new_mfa_method AS (
+    INSERT INTO
+      mfa_method (status, method_type, user_id, label)
+    VALUES
+      (
+        'pending',
+        'phone',
+        $3::INT,
+        $4::TEXT
+      )
+    RETURNING
+      id
+  )
+INSERT INTO
+  mfa_method_type_phone (id, ownership_verification, phone)
+VALUES
+  (
+    (
+      SELECT
+        id
+      FROM
+        new_mfa_method
+    ),
+    $1::UUID,
+    $2::TEXT
+  )
+RETURNING
+  id
+`
+
+type MfaCreateTypePhoneParams struct {
+	OwnershipVerification uuid.UUID   `json:"ownership_verification"`
+	Phone                 string      `json:"phone"`
+	UserID                int32       `json:"user_id"`
+	Label                 pgtype.Text `json:"label"`
+}
+
+// MfaCreateTypePhone
+//
+//	WITH
+//	  new_mfa_method AS (
+//	    INSERT INTO
+//	      mfa_method (status, method_type, user_id, label)
+//	    VALUES
+//	      (
+//	        'pending',
+//	        'phone',
+//	        $3::INT,
+//	        $4::TEXT
+//	      )
+//	    RETURNING
+//	      id
+//	  )
+//	INSERT INTO
+//	  mfa_method_type_phone (id, ownership_verification, phone)
+//	VALUES
+//	  (
+//	    (
+//	      SELECT
+//	        id
+//	      FROM
+//	        new_mfa_method
+//	    ),
+//	    $1::UUID,
+//	    $2::TEXT
+//	  )
+//	RETURNING
+//	  id
+func (q *Queries) MfaCreateTypePhone(ctx context.Context, arg MfaCreateTypePhoneParams) (int32, error) {
+	row := q.db.QueryRow(ctx, mfaCreateTypePhone,
+		arg.OwnershipVerification,
+		arg.Phone,
+		arg.UserID,
+		arg.Label,
+	)
+	var id int32
+	err := row.Scan(&id)
+	return id, err
+}
+
+const mfaDeleteAllBackupCodesForUser = `-- name: MfaDeleteAllBackupCodesForUser :exec
+DELETE FROM backup_codes
+WHERE
+  user_id = $1::INT
+`
+
+// MfaDeleteAllBackupCodesForUser
+//
+//	DELETE FROM backup_codes
+//	WHERE
+//	  user_id = $1::INT
+func (q *Queries) MfaDeleteAllBackupCodesForUser(ctx context.Context, userID int32) error {
+	_, err := q.db.Exec(ctx, mfaDeleteAllBackupCodesForUser, userID)
+	return err
+}
+
+const mfaDeleteMfaSession = `-- name: MfaDeleteMfaSession :exec
+DELETE FROM mfa_session
+WHERE
+  id = $1::UUID
+`
+
+// MfaDeleteMfaSession
+//
+//	DELETE FROM mfa_session
+//	WHERE
+//	  id = $1::UUID
+func (q *Queries) MfaDeleteMfaSession(ctx context.Context, id uuid.UUID) error {
+	_, err := q.db.Exec(ctx, mfaDeleteMfaSession, id)
+	return err
+}
+
+const mfaGetAllMfaMethodsForUser = `-- name: MfaGetAllMfaMethodsForUser :many
+SELECT
+  m.id AS id,
+  m.status AS status,
+  m.method_type AS method_type,
+  m.user_id AS user_id,
+  m.label AS label,
+  e.email AS method_email_email,
+  p.phone AS method_phone_phone,
+  t.algorithm AS method_totp_algorithm,
+  h.algorithm AS method_hotp_algorithm
+FROM
+  mfa_method AS m
+  LEFT JOIN mfa_method_type_email AS e ON e.id = m.id
+  LEFT JOIN mfa_method_type_phone AS p ON p.id = m.id
+  LEFT JOIN mfa_method_type_totp AS t ON t.id = m.id
+  LEFT JOIN mfa_method_type_hotp AS h ON h.id = m.id
+WHERE
+  m.user_id = $1::INT
+`
+
+type MfaGetAllMfaMethodsForUserRow struct {
+	ID                  int32       `json:"id"`
+	Status              string      `json:"status"`
+	MethodType          string      `json:"method_type"`
+	UserID              int32       `json:"user_id"`
+	Label               string      `json:"label"`
+	MethodEmailEmail    pgtype.Text `json:"method_email_email"`
+	MethodPhonePhone    pgtype.Text `json:"method_phone_phone"`
+	MethodTotpAlgorithm pgtype.Text `json:"method_totp_algorithm"`
+	MethodHotpAlgorithm pgtype.Text `json:"method_hotp_algorithm"`
+}
+
+// MfaGetAllMfaMethodsForUser
+//
+//	SELECT
+//	  m.id AS id,
+//	  m.status AS status,
+//	  m.method_type AS method_type,
+//	  m.user_id AS user_id,
+//	  m.label AS label,
+//	  e.email AS method_email_email,
+//	  p.phone AS method_phone_phone,
+//	  t.algorithm AS method_totp_algorithm,
+//	  h.algorithm AS method_hotp_algorithm
+//	FROM
+//	  mfa_method AS m
+//	  LEFT JOIN mfa_method_type_email AS e ON e.id = m.id
+//	  LEFT JOIN mfa_method_type_phone AS p ON p.id = m.id
+//	  LEFT JOIN mfa_method_type_totp AS t ON t.id = m.id
+//	  LEFT JOIN mfa_method_type_hotp AS h ON h.id = m.id
+//	WHERE
+//	  m.user_id = $1::INT
+func (q *Queries) MfaGetAllMfaMethodsForUser(ctx context.Context, userID int32) ([]MfaGetAllMfaMethodsForUserRow, error) {
+	rows, err := q.db.Query(ctx, mfaGetAllMfaMethodsForUser, userID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []MfaGetAllMfaMethodsForUserRow{}
+	for rows.Next() {
+		var i MfaGetAllMfaMethodsForUserRow
+		if err := rows.Scan(
+			&i.ID,
+			&i.Status,
+			&i.MethodType,
+			&i.UserID,
+			&i.Label,
+			&i.MethodEmailEmail,
+			&i.MethodPhonePhone,
+			&i.MethodTotpAlgorithm,
+			&i.MethodHotpAlgorithm,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const mfaGetMethod = `-- name: MfaGetMethod :one
+SELECT
+  m.id AS id,
+  m.status AS status,
+  m.method_type AS method_type,
+  m.user_id AS user_id,
+  m.label AS label,
+  e.email AS method_email_email,
+  p.phone AS method_phone_phone,
+  t.algorithm AS method_totp_algorithm,
+  h.algorithm AS method_hotp_algorithm
+FROM
+  mfa_method AS m
+  LEFT JOIN mfa_method_type_email AS e ON m.id = e.id
+  LEFT JOIN mfa_method_type_phone AS p ON m.id = p.id
+  LEFT JOIN mfa_method_type_totp AS t ON m.id = t.id
+  LEFT JOIN mfa_method_type_hotp AS h ON m.id = h.id
+WHERE
+  m.id = $1::INT
+`
+
+type MfaGetMethodRow struct {
+	ID                  int32       `json:"id"`
+	Status              string      `json:"status"`
+	MethodType          string      `json:"method_type"`
+	UserID              int32       `json:"user_id"`
+	Label               string      `json:"label"`
+	MethodEmailEmail    pgtype.Text `json:"method_email_email"`
+	MethodPhonePhone    pgtype.Text `json:"method_phone_phone"`
+	MethodTotpAlgorithm pgtype.Text `json:"method_totp_algorithm"`
+	MethodHotpAlgorithm pgtype.Text `json:"method_hotp_algorithm"`
+}
+
+// MfaGetMethod
+//
+//	SELECT
+//	  m.id AS id,
+//	  m.status AS status,
+//	  m.method_type AS method_type,
+//	  m.user_id AS user_id,
+//	  m.label AS label,
+//	  e.email AS method_email_email,
+//	  p.phone AS method_phone_phone,
+//	  t.algorithm AS method_totp_algorithm,
+//	  h.algorithm AS method_hotp_algorithm
+//	FROM
+//	  mfa_method AS m
+//	  LEFT JOIN mfa_method_type_email AS e ON m.id = e.id
+//	  LEFT JOIN mfa_method_type_phone AS p ON m.id = p.id
+//	  LEFT JOIN mfa_method_type_totp AS t ON m.id = t.id
+//	  LEFT JOIN mfa_method_type_hotp AS h ON m.id = h.id
+//	WHERE
+//	  m.id = $1::INT
+func (q *Queries) MfaGetMethod(ctx context.Context, id int32) (MfaGetMethodRow, error) {
+	row := q.db.QueryRow(ctx, mfaGetMethod, id)
+	var i MfaGetMethodRow
+	err := row.Scan(
+		&i.ID,
+		&i.Status,
+		&i.MethodType,
+		&i.UserID,
+		&i.Label,
+		&i.MethodEmailEmail,
+		&i.MethodPhonePhone,
+		&i.MethodTotpAlgorithm,
+		&i.MethodHotpAlgorithm,
+	)
+	return i, err
+}
+
+const mfaGetRememberedDevice = `-- name: MfaGetRememberedDevice :one
+SELECT
+  id, user_id, device_fingerprint, created_at, updated_at, expires_at, last_used
+FROM
+  mfa_remembered_devices
+WHERE
+  user_id = $1::INT
+  AND device_fingerprint = $2::TEXT
+  AND expires_at > NOW()
+LIMIT
+  1
+`
+
+type MfaGetRememberedDeviceParams struct {
+	UserID            int32  `json:"user_id"`
+	DeviceFingerprint string `json:"device_fingerprint"`
+}
+
+// MfaGetRememberedDevice
+//
+//	SELECT
+//	  id, user_id, device_fingerprint, created_at, updated_at, expires_at, last_used
+//	FROM
+//	  mfa_remembered_devices
+//	WHERE
+//	  user_id = $1::INT
+//	  AND device_fingerprint = $2::TEXT
+//	  AND expires_at > NOW()
+//	LIMIT
+//	  1
+func (q *Queries) MfaGetRememberedDevice(ctx context.Context, arg MfaGetRememberedDeviceParams) (MfaRememberedDevice, error) {
+	row := q.db.QueryRow(ctx, mfaGetRememberedDevice, arg.UserID, arg.DeviceFingerprint)
+	var i MfaRememberedDevice
+	err := row.Scan(
+		&i.ID,
+		&i.UserID,
+		&i.DeviceFingerprint,
+		&i.CreatedAt,
+		&i.UpdatedAt,
+		&i.ExpiresAt,
+		&i.LastUsed,
+	)
+	return i, err
+}
+
+const mfaGetRememberedDevices = `-- name: MfaGetRememberedDevices :many
+SELECT
+  id, user_id, device_fingerprint, created_at, updated_at, expires_at, last_used
+FROM
+  mfa_remembered_devices
+WHERE
+  user_id = $1::INT
+  AND expires_at > NOW()
+`
+
+// MfaGetRememberedDevices
+//
+//	SELECT
+//	  id, user_id, device_fingerprint, created_at, updated_at, expires_at, last_used
+//	FROM
+//	  mfa_remembered_devices
+//	WHERE
+//	  user_id = $1::INT
+//	  AND expires_at > NOW()
+func (q *Queries) MfaGetRememberedDevices(ctx context.Context, userID int32) ([]MfaRememberedDevice, error) {
+	rows, err := q.db.Query(ctx, mfaGetRememberedDevices, userID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []MfaRememberedDevice{}
+	for rows.Next() {
+		var i MfaRememberedDevice
+		if err := rows.Scan(
+			&i.ID,
+			&i.UserID,
+			&i.DeviceFingerprint,
+			&i.CreatedAt,
+			&i.UpdatedAt,
+			&i.ExpiresAt,
+			&i.LastUsed,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+type MfaInsertBackupCodesParams struct {
+	UserID   int32  `json:"user_id"`
+	CodeHash string `json:"code_hash"`
+}
+
+const mfaRememberDevice = `-- name: MfaRememberDevice :exec
+INSERT INTO
+  mfa_remembered_devices (user_id, device_fingerprint, expires_at)
+VALUES
+  (
+    $1::INT,
+    $2::TEXT,
+    $3::TIMESTAMPTZ
+  )
+`
+
+type MfaRememberDeviceParams struct {
+	UserID            int32              `json:"user_id"`
+	DeviceFingerprint string             `json:"device_fingerprint"`
+	ExpiresAt         pgtype.Timestamptz `json:"expires_at"`
+}
+
+// MfaRememberDevice
+//
+//	INSERT INTO
+//	  mfa_remembered_devices (user_id, device_fingerprint, expires_at)
+//	VALUES
+//	  (
+//	    $1::INT,
+//	    $2::TEXT,
+//	    $3::TIMESTAMPTZ
+//	  )
+func (q *Queries) MfaRememberDevice(ctx context.Context, arg MfaRememberDeviceParams) error {
+	_, err := q.db.Exec(ctx, mfaRememberDevice, arg.UserID, arg.DeviceFingerprint, arg.ExpiresAt)
+	return err
+}
+
+const mfaRemoveRememberDevice = `-- name: MfaRemoveRememberDevice :exec
+DELETE FROM mfa_remembered_devices
+WHERE
+  id = $1::UUID
+`
+
+// MfaRemoveRememberDevice
+//
+//	DELETE FROM mfa_remembered_devices
+//	WHERE
+//	  id = $1::UUID
+func (q *Queries) MfaRemoveRememberDevice(ctx context.Context, id uuid.UUID) error {
+	_, err := q.db.Exec(ctx, mfaRemoveRememberDevice, id)
+	return err
+}
+
+const mfaStartMfaSession = `-- name: MfaStartMfaSession :one
+INSERT INTO
+  mfa_session (user_id, purpose, expires_at)
+VALUES
+  (
+    $1::INT,
+    $2::TEXT,
+    $3::TIMESTAMPTZ
+  )
+RETURNING
+  id
+`
+
+type MfaStartMfaSessionParams struct {
+	UserID    int32              `json:"user_id"`
+	Purpose   string             `json:"purpose"`
+	ExpiresAt pgtype.Timestamptz `json:"expires_at"`
+}
+
+// MfaStartMfaSession
+//
+//	INSERT INTO
+//	  mfa_session (user_id, purpose, expires_at)
+//	VALUES
+//	  (
+//	    $1::INT,
+//	    $2::TEXT,
+//	    $3::TIMESTAMPTZ
+//	  )
+//	RETURNING
+//	  id
+func (q *Queries) MfaStartMfaSession(ctx context.Context, arg MfaStartMfaSessionParams) (uuid.UUID, error) {
+	row := q.db.QueryRow(ctx, mfaStartMfaSession, arg.UserID, arg.Purpose, arg.ExpiresAt)
+	var id uuid.UUID
+	err := row.Scan(&id)
+	return id, err
+}
+
+const mfaUpdateLastUsedForRememberDevice = `-- name: MfaUpdateLastUsedForRememberDevice :exec
+UPDATE mfa_remembered_devices
+SET
+  last_used = $1::TIMESTAMPTZ
+WHERE
+  user_id = $2::INT
+  AND device_fingerprint = $3::TEXT
+  AND expires_at > NOW()
+`
+
+type MfaUpdateLastUsedForRememberDeviceParams struct {
+	LastUsed          pgtype.Timestamptz `json:"last_used"`
+	UserID            int32              `json:"user_id"`
+	DeviceFingerprint string             `json:"device_fingerprint"`
+}
+
+// MfaUpdateLastUsedForRememberDevice
+//
+//	UPDATE mfa_remembered_devices
+//	SET
+//	  last_used = $1::TIMESTAMPTZ
+//	WHERE
+//	  user_id = $2::INT
+//	  AND device_fingerprint = $3::TEXT
+//	  AND expires_at > NOW()
+func (q *Queries) MfaUpdateLastUsedForRememberDevice(ctx context.Context, arg MfaUpdateLastUsedForRememberDeviceParams) error {
+	_, err := q.db.Exec(ctx, mfaUpdateLastUsedForRememberDevice, arg.LastUsed, arg.UserID, arg.DeviceFingerprint)
+	return err
+}
+
+const mfaUseBackupCode = `-- name: MfaUseBackupCode :exec
+UPDATE backup_codes
+SET
+  used = TRUE
+WHERE
+  used = FALSE
+  AND user_id = $1::INT
+  AND code_hash = $2::TEXT
+`
+
+type MfaUseBackupCodeParams struct {
+	UserID   int32  `json:"user_id"`
+	CodeHash string `json:"code_hash"`
+}
+
+// MfaUseBackupCode
+//
+//	UPDATE backup_codes
+//	SET
+//	  used = TRUE
+//	WHERE
+//	  used = FALSE
+//	  AND user_id = $1::INT
+//	  AND code_hash = $2::TEXT
+func (q *Queries) MfaUseBackupCode(ctx context.Context, arg MfaUseBackupCodeParams) error {
+	_, err := q.db.Exec(ctx, mfaUseBackupCode, arg.UserID, arg.CodeHash)
+	return err
 }

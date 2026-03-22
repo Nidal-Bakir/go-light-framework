@@ -65,8 +65,8 @@ func ParseIdToken(ctx context.Context, idToken string) (*GoogleOidcIdTokenClaims
 	if err != nil {
 		return claims, err
 	}
-	claims = newGoogleOidcIdTokenClaimsFromIdTokenPayload(payload)
-	return claims, nil
+	claims, err = newGoogleOidcIdTokenClaimsFromIdTokenPayload(payload)
+	return claims, err
 }
 
 func ValidateIdToken(ctx context.Context, idToken string) (*GoogleOidcIdTokenClaims, error) {
@@ -88,9 +88,8 @@ func ValidateIdToken(ctx context.Context, idToken string) (*GoogleOidcIdTokenCla
 		return claims, err
 	}
 
-	claims = newGoogleOidcIdTokenClaimsFromIdTokenPayload(payload)
-
-	return claims, nil
+	claims, err = newGoogleOidcIdTokenClaimsFromIdTokenPayload(payload)
+	return claims, err
 }
 
 type GoogleOidcIdTokenClaims struct {
@@ -106,7 +105,7 @@ type GoogleOidcIdTokenClaims struct {
 	IssuedAt time.Time `json:"iat"`
 }
 
-func newGoogleOidcIdTokenClaimsFromIdTokenPayload(payload *idtoken.Payload) *GoogleOidcIdTokenClaims {
+func newGoogleOidcIdTokenClaimsFromIdTokenPayload(payload *idtoken.Payload) (*GoogleOidcIdTokenClaims, error) {
 	c := new(GoogleOidcIdTokenClaims)
 
 	safeConv := func(x any) string {
@@ -125,11 +124,16 @@ func newGoogleOidcIdTokenClaimsFromIdTokenPayload(payload *idtoken.Payload) *Goo
 	c.IssuedAt = time.Unix(payload.IssuedAt, 0)
 
 	c.Sub = safeConv(payload.Claims["sub"])
-	c.Email = email.New(safeConv(payload.Claims["email"]))
 	c.Name = safeConv(payload.Claims["name"])
 	c.FamilyName = safeConv(payload.Claims["family_name"])
 	c.GivenName = safeConv(payload.Claims["given_name"])
 	c.Picture = safeConv(payload.Claims["picture"])
 
-	return c
+	email, err := email.Parse(safeConv(payload.Claims["email"]))
+	if err != nil {
+		return nil, err
+	}
+	c.Email = email
+
+	return c, nil
 }

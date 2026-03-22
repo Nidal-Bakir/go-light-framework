@@ -451,9 +451,9 @@ func validateCreateAccountParam(r *http.Request) (createAccountParams, []error) 
 	loginIdentityType.FoldOr(
 		auth.LoginIdentityFoldActions{
 			OnEmail: func() {
-				createAccountParam.Email = email.New(r.FormValue("email"))
-				if !createAccountParam.Email.IsValidEmail() {
-					errList = append(errList, apperr.ErrInvalidEmail)
+				createAccountParam.Email, err = email.Parse(r.FormValue("email"))
+				if err != nil {
+					errList = append(errList, err)
 				}
 			},
 			OnPhone: func() {
@@ -626,9 +626,9 @@ func validatePasswordLoginParam(r *http.Request) (passwordLoginParams, []error) 
 	loginIdentityType.FoldOr(
 		auth.LoginIdentityFoldActions{
 			OnEmail: func() {
-				loginParam.Email = email.New(r.FormValue("email"))
-				if !loginParam.Email.IsValidEmail() {
-					errList = append(errList, apperr.ErrInvalidEmail)
+				loginParam.Email, err = email.Parse(r.FormValue("email"))
+				if err != nil {
+					errList = append(errList, err)
 				}
 			},
 			OnPhone: func() {
@@ -677,7 +677,7 @@ func logout(authRepo auth.Repository) http.HandlerFunc {
 			ctx,
 			int(userAndSession.UserID),
 			int(installation.ID),
-			int(userAndSession.SessionID),
+			userAndSession.SessionID,
 			logoutParam.terminateAllOtherSessions,
 		)
 		if err != nil {
@@ -854,9 +854,9 @@ func validateForgetPasswordParam(r *http.Request) (forgetPasswordParams, []error
 	loginIdentityType.FoldOr(
 		auth.LoginIdentityFoldActions{
 			OnEmail: func() {
-				params.Email = email.New(r.FormValue("email"))
-				if !params.Email.IsValidEmail() {
-					errList = append(errList, apperr.ErrInvalidEmail)
+				params.Email, err = email.Parse(r.FormValue("email"))
+				if err != nil {
+					errList = append(errList, err)
 				}
 			},
 			OnPhone: func() {

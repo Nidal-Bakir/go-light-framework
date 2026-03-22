@@ -60,7 +60,7 @@ type SessionCreateNewSessionParams struct {
 //	    $6::text
 //	)
 //	RETURNING id
-func (q *Queries) SessionCreateNewSession(ctx context.Context, arg SessionCreateNewSessionParams) (int32, error) {
+func (q *Queries) SessionCreateNewSession(ctx context.Context, arg SessionCreateNewSessionParams) (int64, error) {
 	row := q.db.QueryRow(ctx, sessionCreateNewSession,
 		arg.Token,
 		arg.OriginatedFrom,
@@ -69,7 +69,7 @@ func (q *Queries) SessionCreateNewSession(ctx context.Context, arg SessionCreate
 		arg.IpAddress,
 		arg.Purpose,
 	)
-	var id int32
+	var id int64
 	err := row.Scan(&id)
 	return id, err
 }
@@ -115,13 +115,13 @@ WHERE id = $1
 //
 //	DELETE FROM session
 //	WHERE id = $1
-func (q *Queries) SessionDeleteSession(ctx context.Context, id int32) error {
+func (q *Queries) SessionDeleteSession(ctx context.Context, id int64) error {
 	_, err := q.db.Exec(ctx, sessionDeleteSession, id)
 	return err
 }
 
 const sessionGetActiveSessionById = `-- name: SessionGetActiveSessionById :one
-SELECT id, token, ip_address, created_at, updated_at, expires_at, purpose, originated_from, used_installation
+SELECT id, token, ip_address, expires_at, created_at, updated_at, purpose, originated_from, used_installation
 FROM active_session
 WHERE id = $1
 LIMIT 1
@@ -129,20 +129,20 @@ LIMIT 1
 
 // SessionGetActiveSessionById
 //
-//	SELECT id, token, ip_address, created_at, updated_at, expires_at, purpose, originated_from, used_installation
+//	SELECT id, token, ip_address, expires_at, created_at, updated_at, purpose, originated_from, used_installation
 //	FROM active_session
 //	WHERE id = $1
 //	LIMIT 1
-func (q *Queries) SessionGetActiveSessionById(ctx context.Context, id int32) (ActiveSession, error) {
+func (q *Queries) SessionGetActiveSessionById(ctx context.Context, id int64) (ActiveSession, error) {
 	row := q.db.QueryRow(ctx, sessionGetActiveSessionById, id)
 	var i ActiveSession
 	err := row.Scan(
 		&i.ID,
 		&i.Token,
 		&i.IpAddress,
+		&i.ExpiresAt,
 		&i.CreatedAt,
 		&i.UpdatedAt,
-		&i.ExpiresAt,
 		&i.Purpose,
 		&i.OriginatedFrom,
 		&i.UsedInstallation,
@@ -151,7 +151,7 @@ func (q *Queries) SessionGetActiveSessionById(ctx context.Context, id int32) (Ac
 }
 
 const sessionGetActiveSessionByToken = `-- name: SessionGetActiveSessionByToken :one
-SELECT id, token, ip_address, created_at, updated_at, expires_at, purpose, originated_from, used_installation
+SELECT id, token, ip_address, expires_at, created_at, updated_at, purpose, originated_from, used_installation
 FROM active_session
 WHERE token = $1
 LIMIT 1
@@ -159,7 +159,7 @@ LIMIT 1
 
 // SessionGetActiveSessionByToken
 //
-//	SELECT id, token, ip_address, created_at, updated_at, expires_at, purpose, originated_from, used_installation
+//	SELECT id, token, ip_address, expires_at, created_at, updated_at, purpose, originated_from, used_installation
 //	FROM active_session
 //	WHERE token = $1
 //	LIMIT 1
@@ -170,9 +170,9 @@ func (q *Queries) SessionGetActiveSessionByToken(ctx context.Context, token stri
 		&i.ID,
 		&i.Token,
 		&i.IpAddress,
+		&i.ExpiresAt,
 		&i.CreatedAt,
 		&i.UpdatedAt,
-		&i.ExpiresAt,
 		&i.Purpose,
 		&i.OriginatedFrom,
 		&i.UsedInstallation,

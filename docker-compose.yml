@@ -4,17 +4,22 @@ services:
   psql:
     build: ./docker/postgres
     restart: always
-    shm_size: 128mb
+    shm_size: 256mb
     environment:
       POSTGRES_DB: ${DB_DATABASE}
       POSTGRES_USER: ${DB_USERNAME}
       POSTGRES_PASSWORD: ${DB_PASSWORD}
     ports:
-      - "${DB_PORT}:5432"
+      - "127.0.0.1:${DB_PORT}:5432"
     volumes:
-      - psql_volume:/var/lib/postgresql/data
+      - psql_volume:/var/lib/postgresql
     networks:
       - app-network
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${DB_USERNAME} -d ${DB_DATABASE}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
 
   pgadmin:
     build: ./docker/pgadmin
@@ -23,19 +28,28 @@ services:
     environment:
       PGADMIN_DEFAULT_EMAIL: ${PGADMIN_DEFAULT_EMAIL}
       PGADMIN_DEFAULT_PASSWORD: ${PGADMIN_DEFAULT_PASSWORD}
+      PGADMIN_CONFIG_SERVER_MODE: "False"
     ports:
-      - "7894:80"
+      - "127.0.0.1:7894:80"
+    volumes:
+      - pgadmin_volume:/var/lib/pgadmin
     networks:
       - app-network
+    depends_on:
+      - psql
 
   redisinsight:
     build: ./docker/redisinsight
     profiles: ["dev"]
     restart: always
     ports:
-      - "5540:5540"
+      - "127.0.0.1:5540:5540"
+    volumes:
+      - redisinsight_volume:/data
     networks:
       - app-network
+    depends_on:
+      - redis
 
   redis:
     build: ./docker/redis
@@ -46,12 +60,18 @@ services:
       - redis_volume:/data
     networks:
       - app-network
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
 
 volumes:
   psql_volume:
   redis_volume:
+  pgadmin_volume:
+  redisinsight_volume:
 
 networks:
   app-network:
-    name: go-light-framework
     driver: bridge

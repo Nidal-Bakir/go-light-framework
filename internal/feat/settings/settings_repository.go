@@ -7,8 +7,8 @@ import (
 	"github.com/Nidal-Bakir/go-todo-backend/internal/apperr"
 	"github.com/Nidal-Bakir/go-todo-backend/internal/database"
 	"github.com/Nidal-Bakir/go-todo-backend/internal/database/database_queries"
-	"github.com/Nidal-Bakir/go-todo-backend/internal/feat/perm"
-	"github.com/Nidal-Bakir/go-todo-backend/internal/feat/perm/baseperm"
+	"github.com/Nidal-Bakir/go-todo-backend/internal/perm"
+	"github.com/Nidal-Bakir/go-todo-backend/internal/perm/baseperm"
 	redisdb "github.com/Nidal-Bakir/go-todo-backend/internal/redis_db"
 	"github.com/redis/go-redis/v9"
 	"github.com/rs/zerolog"
@@ -66,7 +66,7 @@ func (r repositoryImpl) GetSetting(ctx context.Context, role, label string) (str
 func (r repositoryImpl) readSettingFromCache(ctx context.Context, label string, zlog zerolog.Logger) *string {
 	val, err := r.redis.HGet(ctx, redisKey, label).Result()
 	if err != nil {
-		if !redisdb.IsErrRedisNilNoRows(err) {
+		if !redisdb.IsRedisNil(err) {
 			zlog.Err(err).Msg("could not read the settings value from redis")
 		}
 		return nil

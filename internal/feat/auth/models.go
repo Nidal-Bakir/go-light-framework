@@ -241,7 +241,7 @@ type TempPasswordUser struct {
 	Lname             string
 	Email             *email.Email
 	Phone             *phonenumber.PhoneNumber
-	OtpId             string
+	OtpId             uuid.UUID
 	Password          string
 }
 
@@ -262,7 +262,7 @@ func (tu TempPasswordUser) ToMap() map[string]string {
 			},
 		},
 	)
-	m["otp_id"] = tu.OtpId
+	m["otp_id"] = tu.OtpId.String()
 	m["password"] = tu.Password
 	return m
 }
@@ -273,13 +273,13 @@ func (tu *TempPasswordUser) FromMap(m map[string]string) *TempPasswordUser {
 	tu.LoginIdentityType = LoginIdentityType(m["login_identity_type"])
 	tu.LoginIdentityType.Fold(
 		LoginIdentityFoldActions{
-			OnEmail: func() { tu.Email = email.New(m["email"]) },
+			OnEmail: func() { tu.Email = email.MustParse(m["email"]) },
 			OnPhone: func() { tu.Phone = phonenumber.MustParse(m["phone_number"]) },
 		},
 	)
 	tu.Fname = m["f_name"]
 	tu.Lname = m["l_name"]
-	tu.OtpId = m["otp_id"]
+	tu.OtpId = uuid.MustParse(m["otp_id"])
 	tu.Password = m["password"]
 	return tu
 }
@@ -289,7 +289,7 @@ func (tu TempPasswordUser) ValidateForStore() (ok bool) {
 
 	tu.LoginIdentityType.FoldOr(
 		LoginIdentityFoldActions{
-			OnEmail: func() { ok = ok && tu.Email.IsValidEmail() },
+			OnEmail: func() { ok = ok && tu.Email != nil },
 			OnPhone: func() { ok = ok && tu.Phone.IsValidPhoneNumber() },
 		},
 		func() { ok = false },
@@ -360,7 +360,7 @@ type UserAndSession struct {
 	UserDeletedAt    pgtype.Timestamptz `json:"user_deleted_at"`
 	UserRoleName     pgtype.Text        `json:"user_role_name"`
 
-	SessionID               int32              `json:"session_id"`
+	SessionID               int64              `json:"session_id"`
 	SessionToken            string             `json:"session_token"`
 	SessionCreatedAt        pgtype.Timestamptz `json:"session_created_at"`
 	SessionUpdatedAt        pgtype.Timestamptz `json:"session_updated_at"`
@@ -395,21 +395,21 @@ type ForgetPasswordTmpDataStore struct {
 	Id uuid.UUID // used as a key
 
 	UserId int
-	OtpId  string
+	OtpId  uuid.UUID
 }
 
 func (f ForgetPasswordTmpDataStore) ToMap() map[string]string {
 	m := make(map[string]string, 8)
 	m["id"] = f.Id.String()
 	m["user_id"] = strconv.Itoa(f.UserId)
-	m["otp_id"] = f.OtpId
+	m["otp_id"] = f.OtpId.String()
 	return m
 }
 
 func (f *ForgetPasswordTmpDataStore) FromMap(m map[string]string) *ForgetPasswordTmpDataStore {
 	f.Id = uuid.MustParse(m["id"])
 	f.UserId = utils.Must(strconv.Atoi(m["user_id"]))
-	f.OtpId = m["otp_id"]
+	f.OtpId = uuid.MustParse(m["otp_id"])
 	return f
 }
 
@@ -488,8 +488,8 @@ type Installation struct {
 	CreatedAt               time.Time  `json:"created_at"`
 	UpdatedAt               time.Time  `json:"updated_at"`
 	DeletedAt               *time.Time `json:"deleted_at"`
-	AttachTo                *int32     `json:"attach_to"`
-	LastAttachTo            *int32     `json:"last_attach_to"`
+	AttachTo                *int64     `json:"attach_to"`
+	LastAttachTo            *int64     `json:"last_attach_to"`
 }
 
 func NewInstallationFromDatabaseUser(i database_queries.Installation) Installation {
@@ -503,16 +503,16 @@ func NewInstallationFromDatabaseUser(i database_queries.Installation) Installati
 		deletedAt = nil
 	}
 
-	attachTo := new(int32)
+	attachTo := new(int64)
 	if i.AttachTo.Valid {
-		attachTo = &i.AttachTo.Int32
+		attachTo = &i.AttachTo.Int64
 	} else {
 		attachTo = nil
 	}
 
-	lastAttachTo := new(int32)
+	lastAttachTo := new(int64)
 	if i.LastAttachTo.Valid {
-		lastAttachTo = &i.LastAttachTo.Int32
+		lastAttachTo = &i.LastAttachTo.Int64
 	} else {
 		lastAttachTo = nil
 	}

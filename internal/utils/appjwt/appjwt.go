@@ -44,10 +44,10 @@ type CustomClaims struct {
 	jwt.RegisteredClaims
 }
 
-func (a AppJWT) GenWithClaims(tokenExpAt time.Time, claims map[string]string, subject string) (token string, err error) {
+func (a AppJWT) GenWithClaims(tokenExpAt time.Time, claims map[string]string, subject string) (token string, customClaims CustomClaims, err error) {
 	timeNow := time.Now()
 
-	customClaims := CustomClaims{
+	customClaims = CustomClaims{
 		claims,
 		jwt.RegisteredClaims{
 			ExpiresAt: jwt.NewNumericDate(tokenExpAt),
@@ -63,10 +63,10 @@ func (a AppJWT) GenWithClaims(tokenExpAt time.Time, claims map[string]string, su
 
 	sToken, err := jwtToken.SignedString(a.key)
 	if err != nil {
-		return "", err
+		return "", customClaims, err
 	}
 
-	return sToken, nil
+	return sToken, customClaims, nil
 }
 
 // be carfull the subject shuold match from the signing phase, use "" to skip it

@@ -1111,7 +1111,6 @@ func (q *Queries) LoginIdentityGetPasswordLoginIdentity(ctx context.Context, arg
 const loginIdentityGetPasswordLoginIdentityWithUser = `-- name: LoginIdentityGetPasswordLoginIdentityWithUser :one
 SELECT
     li.id AS login_identity_id,
-    li.user_id,
     li.identity_type,
     li.is_primary,
     li.last_used_at,
@@ -1153,7 +1152,6 @@ type LoginIdentityGetPasswordLoginIdentityWithUserParams struct {
 
 type LoginIdentityGetPasswordLoginIdentityWithUserRow struct {
 	LoginIdentityID         int32              `json:"login_identity_id"`
-	UserID                  int32              `json:"user_id"`
 	IdentityType            string             `json:"identity_type"`
 	IsPrimary               pgtype.Bool        `json:"is_primary"`
 	LastUsedAt              pgtype.Timestamptz `json:"last_used_at"`
@@ -1163,7 +1161,7 @@ type LoginIdentityGetPasswordLoginIdentityWithUserRow struct {
 	HashedPass              string             `json:"hashed_pass"`
 	PassSalt                string             `json:"pass_salt"`
 	VerifiedAt              pgtype.Timestamptz `json:"verified_at"`
-	UserID_2                int32              `json:"user_id_2"`
+	UserID                  int32              `json:"user_id"`
 	UserUsername            string             `json:"user_username"`
 	UserProfileImage        pgtype.Text        `json:"user_profile_image"`
 	UserFirstName           string             `json:"user_first_name"`
@@ -1178,7 +1176,6 @@ type LoginIdentityGetPasswordLoginIdentityWithUserRow struct {
 //
 //	SELECT
 //	    li.id AS login_identity_id,
-//	    li.user_id,
 //	    li.identity_type,
 //	    li.is_primary,
 //	    li.last_used_at,
@@ -1216,7 +1213,6 @@ func (q *Queries) LoginIdentityGetPasswordLoginIdentityWithUser(ctx context.Cont
 	var i LoginIdentityGetPasswordLoginIdentityWithUserRow
 	err := row.Scan(
 		&i.LoginIdentityID,
-		&i.UserID,
 		&i.IdentityType,
 		&i.IsPrimary,
 		&i.LastUsedAt,
@@ -1226,7 +1222,7 @@ func (q *Queries) LoginIdentityGetPasswordLoginIdentityWithUser(ctx context.Cont
 		&i.HashedPass,
 		&i.PassSalt,
 		&i.VerifiedAt,
-		&i.UserID_2,
+		&i.UserID,
 		&i.UserUsername,
 		&i.UserProfileImage,
 		&i.UserFirstName,

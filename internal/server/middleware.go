@@ -9,9 +9,9 @@ import (
 	"github.com/Nidal-Bakir/go-todo-backend/internal/appenv"
 	"github.com/Nidal-Bakir/go-todo-backend/internal/apperr"
 	"github.com/Nidal-Bakir/go-todo-backend/internal/feat/auth"
-	"github.com/Nidal-Bakir/go-todo-backend/internal/feat/perm/baseperm"
 	"github.com/Nidal-Bakir/go-todo-backend/internal/feat/settings"
 	"github.com/Nidal-Bakir/go-todo-backend/internal/feat/settings/labels"
+	"github.com/Nidal-Bakir/go-todo-backend/internal/perm/baseperm"
 	"github.com/rs/zerolog"
 )
 
@@ -51,7 +51,7 @@ func authBySessionPurpose(authRepo auth.Repository, sessionPurpose auth.SessionP
 				return
 			}
 
-			authClaims, err := authRepo.VerifyAuthToken(token, sessionPurpose)
+			_, err := authRepo.VerifyAuthToken(ctx, token, sessionPurpose)
 			if err != nil {
 				if appenv.IsStagOrLocal() {
 					zlog.Error().Err(err).Msg("Error from jwt verify function")
@@ -60,7 +60,7 @@ func authBySessionPurpose(authRepo auth.Repository, sessionPurpose auth.SessionP
 				return
 			}
 
-			userAndSessionData, err := authRepo.GetUserAndSessionDataBySessionToken(ctx, token, authClaims.SessionPurpose)
+			userAndSessionData, err := authRepo.GetUserAndSessionDataBySessionToken(ctx, token, sessionPurpose)
 			if err != nil {
 				if errors.Is(err, apperr.ErrNoResult) {
 					err = fmt.Errorf("unauthorized")
@@ -82,7 +82,7 @@ func authBySessionPurpose(authRepo auth.Repository, sessionPurpose auth.SessionP
 			}
 
 			ctx = auth.ContextWithUserAndSession(ctx, userAndSessionData)
-			ctx = zlog.With().Int32("user_id", userAndSessionData.UserID).Int32("session_id", userAndSessionData.SessionID).Logger().WithContext(ctx)
+			ctx = zlog.With().Int32("user_id", userAndSessionData.UserID).Int64("session_id", userAndSessionData.SessionID).Logger().WithContext(ctx)
 
 			next.ServeHTTP(w, r.WithContext(ctx))
 		}
@@ -137,7 +137,7 @@ func Installation(authRepo auth.Repository) func(http.Handler) http.HandlerFunc 
 				return
 			}
 
-			if _, err := authRepo.VerifyInstallationToken(installationToken); err != nil {
+			if _, err := authRepo.VerifyInstallationToken(ctx, installationToken); err != nil {
 				if appenv.IsStagOrLocal() {
 					zlog.Error().Err(err).Msg("Error from jwt verify function")
 				}
@@ -149,7 +149,7 @@ func Installation(authRepo auth.Repository) func(http.Handler) http.HandlerFunc 
 				return
 			}
 
-			var attachedToSessionId *int32
+			var attachedToSessionId *int64
 			userAndSession, ok := auth.UserAndSessionFromContext(ctx)
 			if ok {
 				attachedToSessionId = &userAndSession.SessionID

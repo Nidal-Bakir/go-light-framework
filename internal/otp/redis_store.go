@@ -20,8 +20,8 @@ func NewRedisStore(redis *redis.Client) StoreProvider {
 	return &redisStore{redis}
 }
 
-func (s *redisStore) StoreOtp(ctx context.Context, otpHash string, purpose OtpPurpose, channel OtpChannel, ExpiresAfter time.Duration) (id string, err error) {
-	id = uuid.New().String()
+func (s *redisStore) StoreOtp(ctx context.Context, otpHash string, purpose OtpPurpose, channel OtpChannel, ExpiresAfter time.Duration) (id uuid.UUID, err error) {
+	id = uuid.New()
 	err = s.redis.HSetEXWithArgs(
 		ctx,
 		s.generateKey(id),
@@ -43,10 +43,10 @@ func (s *redisStore) StoreOtp(ctx context.Context, otpHash string, purpose OtpPu
 	return id, err
 }
 
-func (s *redisStore) GetOtp(ctx context.Context, id string) (*OtpStoreModel, error) {
+func (s *redisStore) GetOtp(ctx context.Context, id uuid.UUID) (*OtpStoreModel, error) {
 	resultMap, err := s.redis.HGetAll(ctx, s.generateKey(id)).Result()
 	if err != nil {
-		if redisdb.IsErrRedisNilNoRows(err) {
+		if redisdb.IsRedisNil(err) {
 			return nil, NotFoundOTP
 		}
 		return nil, err
@@ -54,7 +54,7 @@ func (s *redisStore) GetOtp(ctx context.Context, id string) (*OtpStoreModel, err
 	return new(OtpStoreModel).fromMap(resultMap), nil
 }
 
-func (s *redisStore) RemoveOtp(ctx context.Context, id string) error {
+func (s *redisStore) RemoveOtp(ctx context.Context, id uuid.UUID) error {
 	return s.redis.Del(ctx, s.generateKey(id)).Err()
 }
 
@@ -79,7 +79,7 @@ attempts = redis.call("HINCRBY", KEYS[1], ARGV[1], increment)
 return {"OK", attempts, limit_reached}
 `)
 
-func (s *redisStore) IncrementAttemptCounter(ctx context.Context, id string, limit int) (attempts int, limitReached bool, err error) {
+func (s *redisStore) IncrementAttemptCounter(ctx context.Context, id uuid.UUID, limit int) (attempts int, limitReached bool, err error) {
 	vals, err := script.Run(
 		ctx,
 		s.redis,
@@ -109,13 +109,13 @@ func (s *redisStore) IncrementAttemptCounter(ctx context.Context, id string, lim
 	return 0, true, fmt.Errorf("luo status erorr")
 }
 
-func (s *redisStore) generateKey(id string) string {
-	return fmt.Sprint("otp:", id)
+func (s *redisStore) generateKey(id uuid.UUID) string {
+	return fmt.Sprint("otp:", id.String())
 }
 
 func (m OtpStoreModel) toKeyValueSlice() []string {
 	return []string{
-		"id", m.ID,
+		"id", m.ID.String(),
 		"otp_hash", m.OtpHash,
 		"channel", m.Channel.String(),
 		"purpose", m.Purpose.String(),
@@ -127,7 +127,7 @@ func (m OtpStoreModel) toKeyValueSlice() []string {
 }
 
 func (m *OtpStoreModel) fromMap(data map[string]string) *OtpStoreModel {
-	m.ID = data["id"]
+	m.ID = uuid.MustParse(data["id"])
 	m.OtpHash = data["otp_hash"]
 	m.Channel = OtpChannel(data["channel"])
 	m.Purpose = OtpPurpose(data["purpose"])

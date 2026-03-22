@@ -6,6 +6,7 @@ import (
 	"time"
 
 	"github.com/Nidal-Bakir/go-todo-backend/internal/database/database_queries"
+	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgtype"
 )
@@ -57,6 +58,10 @@ func ToPgTypeTimestamp(t time.Time) pgtype.Timestamp {
 
 func ToPgTypeTimestamptz(t time.Time) pgtype.Timestamptz {
 	return pgtype.Timestamptz{Time: t, Valid: !t.IsZero()}
+}
+
+func ToPgTypeUUID(id uuid.UUID) pgtype.UUID {
+	return pgtype.UUID{Bytes: id, Valid: uuid.Nil != id}
 }
 
 func PointerToPgTypeInt4(num *int32) pgtype.Int4 {

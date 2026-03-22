@@ -99,7 +99,7 @@ type UsersGetUserAndSessionDataBySessionTokenParams struct {
 }
 
 type UsersGetUserAndSessionDataBySessionTokenRow struct {
-	SessionID               int32              `json:"session_id"`
+	SessionID               int64              `json:"session_id"`
 	SessionToken            string             `json:"session_token"`
 	SessionOriginatedFrom   int32              `json:"session_originated_from"`
 	SessionUsedInstallation int32              `json:"session_used_installation"`

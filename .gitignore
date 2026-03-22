@@ -35,10 +35,12 @@ tmp/
 bin/
 *templ.go
 
-
 # Keys
 *.pem
 client_secret_*.json
 
 # go debug
 __debug_bin*
+
+# docker volumes data
+docker-volumes/

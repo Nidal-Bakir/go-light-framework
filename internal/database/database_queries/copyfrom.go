@@ -9,6 +9,45 @@ import (
 	"context"
 )
 
+// iteratorForMfaInsertBackupCodes implements pgx.CopyFromSource.
+type iteratorForMfaInsertBackupCodes struct {
+	rows                 []MfaInsertBackupCodesParams
+	skippedFirstNextCall bool
+}
+
+func (r *iteratorForMfaInsertBackupCodes) Next() bool {
+	if len(r.rows) == 0 {
+		return false
+	}
+	if !r.skippedFirstNextCall {
+		r.skippedFirstNextCall = true
+		return true
+	}
+	r.rows = r.rows[1:]
+	return len(r.rows) > 0
+}
+
+func (r iteratorForMfaInsertBackupCodes) Values() ([]interface{}, error) {
+	return []interface{}{
+		r.rows[0].UserID,
+		r.rows[0].CodeHash,
+	}, nil
+}
+
+func (r iteratorForMfaInsertBackupCodes) Err() error {
+	return nil
+}
+
+// MfaInsertBackupCodes
+//
+//	INSERT INTO
+//	  backup_codes (user_id, code_hash)
+//	VALUES
+//	  ($1::INT, $2::TEXT)
+func (q *Queries) MfaInsertBackupCodes(ctx context.Context, arg []MfaInsertBackupCodesParams) (int64, error) {
+	return q.db.CopyFrom(ctx, []string{"backup_codes"}, []string{"user_id", "code_hash"}, &iteratorForMfaInsertBackupCodes{rows: arg})
+}
+
 // iteratorForPermAddPermissionsToRoles implements pgx.CopyFromSource.
 type iteratorForPermAddPermissionsToRoles struct {
 	rows                 []PermAddPermissionsToRolesParams
@@ -116,4 +155,50 @@ func (r iteratorForPermCreateNewRoles) Err() error {
 //	VALUES($1)
 func (q *Queries) PermCreateNewRoles(ctx context.Context, name []string) (int64, error) {
 	return q.db.CopyFrom(ctx, []string{"role"}, []string{"name"}, &iteratorForPermCreateNewRoles{rows: name})
+}
+
+// iteratorForSessionStoreStoreAttrs implements pgx.CopyFromSource.
+type iteratorForSessionStoreStoreAttrs struct {
+	rows                 []SessionStoreStoreAttrsParams
+	skippedFirstNextCall bool
+}
+
+func (r *iteratorForSessionStoreStoreAttrs) Next() bool {
+	if len(r.rows) == 0 {
+		return false
+	}
+	if !r.skippedFirstNextCall {
+		r.skippedFirstNextCall = true
+		return true
+	}
+	r.rows = r.rows[1:]
+	return len(r.rows) > 0
+}
+
+func (r iteratorForSessionStoreStoreAttrs) Values() ([]interface{}, error) {
+	return []interface{}{
+		r.rows[0].Session,
+		r.rows[0].AttrKey,
+		r.rows[0].AttrValue,
+		r.rows[0].ExpiresAt,
+	}, nil
+}
+
+func (r iteratorForSessionStoreStoreAttrs) Err() error {
+	return nil
+}
+
+// SessionStoreStoreAttrs
+//
+//	INSERT INTO
+//	  session_store (session, attr_key, attr_value, expires_at)
+//	VALUES
+//	  (
+//	    $1::TEXT,
+//	    $2::TEXT,
+//	    $3::TEXT,
+//	    $4::timestamptz
+//	  )
+func (q *Queries) SessionStoreStoreAttrs(ctx context.Context, arg []SessionStoreStoreAttrsParams) (int64, error) {
+	return q.db.CopyFrom(ctx, []string{"session_store"}, []string{"session", "attr_key", "attr_value", "expires_at"}, &iteratorForSessionStoreStoreAttrs{rows: arg})
 }

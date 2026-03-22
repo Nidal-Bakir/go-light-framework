@@ -6,6 +6,7 @@ import (
 	"github.com/Nidal-Bakir/go-todo-backend/internal/l10n"
 	"github.com/Nidal-Bakir/go-todo-backend/internal/utils/email"
 	"github.com/Nidal-Bakir/go-todo-backend/internal/utils/phonenumber"
+	"github.com/google/uuid"
 )
 
 type OtpChannel string
@@ -28,7 +29,7 @@ func (o OtpPurpose) String() string {
 }
 
 type OtpStoreModel struct {
-	ID        string
+	ID        uuid.UUID
 	OtpHash   string
 	Purpose   OtpPurpose
 	Channel   OtpChannel

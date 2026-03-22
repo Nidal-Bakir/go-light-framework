@@ -1,6 +1,6 @@
 module github.com/Nidal-Bakir/go-todo-backend
 
-go 1.25.0
+go 1.26.1
 
 require (
 	github.com/Nidal-Bakir/go-semver v1.1.0

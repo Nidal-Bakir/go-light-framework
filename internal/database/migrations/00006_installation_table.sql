@@ -13,8 +13,8 @@ CREATE TABLE installation (
     created_at TIMESTAMPTZ DEFAULT NOW() NOT NULL,
     updated_at TIMESTAMPTZ DEFAULT NOW() NOT NULL,
     deleted_at TIMESTAMPTZ,
-    attach_to INTEGER REFERENCES session(id),
-    last_attach_to INTEGER REFERENCES session(id)
+    attach_to BIGINT REFERENCES session(id),
+    last_attach_to BIGINT REFERENCES session(id)
 );
 
 CREATE TRIGGER update_installation_updated_at_column BEFORE

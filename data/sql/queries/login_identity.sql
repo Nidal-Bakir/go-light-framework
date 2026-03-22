@@ -138,7 +138,6 @@ LIMIT 1;
 -- name: LoginIdentityGetPasswordLoginIdentityWithUser :one
 SELECT
     li.id AS login_identity_id,
-    li.user_id,
     li.identity_type,
     li.is_primary,
     li.last_used_at,

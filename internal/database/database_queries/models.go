@@ -109,12 +109,12 @@ type ActivePasswordLoginIdentity struct {
 }
 
 type ActiveSession struct {
-	ID               int32              `json:"id"`
+	ID               int64              `json:"id"`
 	Token            string             `json:"token"`
 	IpAddress        netip.Addr         `json:"ip_address"`
+	ExpiresAt        pgtype.Timestamptz `json:"expires_at"`
 	CreatedAt        pgtype.Timestamptz `json:"created_at"`
 	UpdatedAt        pgtype.Timestamptz `json:"updated_at"`
-	ExpiresAt        pgtype.Timestamptz `json:"expires_at"`
 	Purpose          string             `json:"purpose"`
 	OriginatedFrom   int32              `json:"originated_from"`
 	UsedInstallation int32              `json:"used_installation"`
@@ -169,8 +169,8 @@ type Installation struct {
 	CreatedAt               pgtype.Timestamptz `json:"created_at"`
 	UpdatedAt               pgtype.Timestamptz `json:"updated_at"`
 	DeletedAt               pgtype.Timestamptz `json:"deleted_at"`
-	AttachTo                pgtype.Int4        `json:"attach_to"`
-	LastAttachTo            pgtype.Int4        `json:"last_attach_to"`
+	AttachTo                pgtype.Int8        `json:"attach_to"`
+	LastAttachTo            pgtype.Int8        `json:"last_attach_to"`
 }
 
 type LoginIdentity struct {
@@ -266,8 +266,8 @@ type NotDeletedInstallation struct {
 	CreatedAt               pgtype.Timestamptz `json:"created_at"`
 	UpdatedAt               pgtype.Timestamptz `json:"updated_at"`
 	DeletedAt               pgtype.Timestamptz `json:"deleted_at"`
-	AttachTo                pgtype.Int4        `json:"attach_to"`
-	LastAttachTo            pgtype.Int4        `json:"last_attach_to"`
+	AttachTo                pgtype.Int8        `json:"attach_to"`
+	LastAttachTo            pgtype.Int8        `json:"last_attach_to"`
 }
 
 type NotDeletedUser struct {
@@ -410,15 +410,24 @@ type SeederVersion struct {
 }
 
 type Session struct {
-	ID               int32              `json:"id"`
+	ID               int64              `json:"id"`
 	Token            string             `json:"token"`
 	IpAddress        netip.Addr         `json:"ip_address"`
+	ExpiresAt        pgtype.Timestamptz `json:"expires_at"`
 	CreatedAt        pgtype.Timestamptz `json:"created_at"`
 	UpdatedAt        pgtype.Timestamptz `json:"updated_at"`
-	ExpiresAt        pgtype.Timestamptz `json:"expires_at"`
 	Purpose          string             `json:"purpose"`
 	OriginatedFrom   int32              `json:"originated_from"`
 	UsedInstallation int32              `json:"used_installation"`
+}
+
+type SessionStore struct {
+	Session   string             `json:"session"`
+	AttrKey   string             `json:"attr_key"`
+	AttrValue pgtype.Text        `json:"attr_value"`
+	ExpiresAt pgtype.Timestamptz `json:"expires_at"`
+	CreatedAt pgtype.Timestamptz `json:"created_at"`
+	UpdatedAt pgtype.Timestamptz `json:"updated_at"`
 }
 
 type Setting struct {

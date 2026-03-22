@@ -21,7 +21,7 @@ WHERE id = $1
 
 type InstallationAttachSessionToInstallationByIdParams struct {
 	ID       int32       `json:"id"`
-	AttachTo pgtype.Int4 `json:"attach_to"`
+	AttachTo pgtype.Int8 `json:"attach_to"`
 }
 
 // InstallationAttachSessionToInstallationById
@@ -49,7 +49,7 @@ WHERE installation_token = $1
 
 type InstallationAttachSessionToInstallationByTokenParams struct {
 	InstallationToken string      `json:"installation_token"`
-	AttachTo          pgtype.Int4 `json:"attach_to"`
+	AttachTo          pgtype.Int8 `json:"attach_to"`
 }
 
 // InstallationAttachSessionToInstallationByToken
@@ -129,7 +129,7 @@ WHERE id = $1
 
 type InstallationDetachSessionFromInstallationByIdParams struct {
 	ID           int32       `json:"id"`
-	LastAttachTo pgtype.Int4 `json:"last_attach_to"`
+	LastAttachTo pgtype.Int8 `json:"last_attach_to"`
 }
 
 // InstallationDetachSessionFromInstallationById
@@ -152,7 +152,7 @@ WHERE installation_token = $1
 
 type InstallationDetachSessionFromInstallationByTokenParams struct {
 	InstallationToken string      `json:"installation_token"`
-	LastAttachTo      pgtype.Int4 `json:"last_attach_to"`
+	LastAttachTo      pgtype.Int8 `json:"last_attach_to"`
 }
 
 // InstallationDetachSessionFromInstallationByToken
@@ -249,7 +249,7 @@ LIMIT 1
 
 type InstallationGetInstallationUsingTokenAndWhereAttachToParams struct {
 	InstallationToken string      `json:"installation_token"`
-	AttachTo          pgtype.Int4 `json:"attach_to"`
+	AttachTo          pgtype.Int8 `json:"attach_to"`
 }
 
 // InstallationGetInstallationUsingTokenAndWhereAttachTo

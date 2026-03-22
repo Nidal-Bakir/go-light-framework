@@ -3,6 +3,8 @@ package otp
 import (
 	"context"
 	"time"
+
+	"github.com/google/uuid"
 )
 
 // StoreProvider defines operations for secure OTP storage and attempt tracking.
@@ -24,7 +26,7 @@ type StoreProvider interface {
 	// Returns:
 	//   id: Unique identifier for this OTP entry; required for all subsequent operations
 	//   err: Storage error (nil if successful)
-	StoreOtp(ctx context.Context, otpHash string, purpose OtpPurpose, channel OtpChannel, expiresAfter time.Duration) (id string, err error)
+	StoreOtp(ctx context.Context, otpHash string, purpose OtpPurpose, channel OtpChannel, expiresAfter time.Duration) (id uuid.UUID, err error)
 
 	// GetOtp retrieves the complete OTP entry for the given ID.
 	// Returns nil if the entry doesn't exist or has expired.
@@ -32,14 +34,14 @@ type StoreProvider interface {
 	// Use this method to inspect OTP metadata (purpose, channel, expiry)
 	// without performing verification. For security, the returned model
 	// should contain only the hashed OTP, not the plaintext value.
-	GetOtp(ctx context.Context, id string) (*OtpStoreModel, error)
+	GetOtp(ctx context.Context, id uuid.UUID) (*OtpStoreModel, error)
 
 	// RemoveOtp deletes an OTP entry immediately.
 	// Typically called after successful verification or when explicitly
 	// invalidating an OTP (e.g., user requests new OTP).
 	//
 	// Removing a non-existent entry should not return an error.
-	RemoveOtp(ctx context.Context, id string) error
+	RemoveOtp(ctx context.Context, id uuid.UUID) error
 
 	// IncrementAttemptCounter increments the attempt counter for an entry.
 	// The counter starts at 1 when StoreOtp is called and increments up to
@@ -57,5 +59,5 @@ type StoreProvider interface {
 	//   attempts: Current attempt count (never exceeds limit)
 	//   limitReached: True if attempt limit has been reached
 	//   err: Error if operation fails (nil for non-existent entries)
-	IncrementAttemptCounter(ctx context.Context, id string, limit int) (attempts int, limitReached bool, err error)
+	IncrementAttemptCounter(ctx context.Context, id uuid.UUID, limit int) (attempts int, limitReached bool, err error)
 }

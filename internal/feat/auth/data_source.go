@@ -9,6 +9,7 @@ import (
 	"github.com/Nidal-Bakir/go-todo-backend/internal/apperr"
 	"github.com/Nidal-Bakir/go-todo-backend/internal/database"
 	"github.com/Nidal-Bakir/go-todo-backend/internal/database/database_queries"
+	"github.com/Nidal-Bakir/go-todo-backend/internal/session"
 	"github.com/Nidal-Bakir/go-todo-backend/internal/utils/email"
 	"github.com/Nidal-Bakir/go-todo-backend/internal/utils/phonenumber"
 	"github.com/google/uuid"
@@ -32,7 +33,7 @@ type DataSource interface {
 	GetUserFromTempCache(ctx context.Context, tempUserId uuid.UUID) (*TempPasswordUser, error)
 	GetForgetPasswordDataFromTempCache(ctx context.Context, dataId uuid.UUID) (*ForgetPasswordTmpDataStore, error)
 
-	GetInstallationUsingTokenAndWhereAttachTo(ctx context.Context, installationToken string, attachedToSession int32) (database_queries.Installation, error)
+	GetInstallationUsingTokenAndWhereAttachTo(ctx context.Context, installationToken string, attachedToSession int64) (database_queries.Installation, error)
 	GetInstallationUsingToken(ctx context.Context, installationToken string) (database_queries.Installation, error)
 
 	GetPasswordLoginIdentityWithUser(ctx context.Context, identityValue string, loginIdentityType LoginIdentityType) (database_queries.LoginIdentityGetPasswordLoginIdentityWithUserRow, error)
@@ -56,10 +57,10 @@ type DataSource interface {
 
 	// Update ---
 
-	UpdateusernameForUser(ctx context.Context, userId int32, newUsername string) error
+	UpdateUsernameForUser(ctx context.Context, userId int32, newUsername string) error
 
 	UpdateInstallation(ctx context.Context, installationToken string, data UpdateInstallationData) error
-	ExpTokenAndUnlinkFromInstallation(ctx context.Context, installationId, tokenId int) error
+	ExpTokenAndUnlinkFromInstallation(ctx context.Context, installationId int, tokenId int64) error
 	ExpAllTokensAndUnlinkThemFromInstallation(ctx context.Context, userId int) error
 
 	ChangePasswordLoginIdentityForUser(ctx context.Context, userId int32, HashedPass, PassSalt string) error
@@ -70,20 +71,27 @@ type DataSource interface {
 
 	// mfa
 	IsMfaEnabledForUser(ctx context.Context, userId int) (bool, error)
-	CreateEmailMfa(ctx context.Context, userId int, email email.Email, ownershipVerificationId string) (int, error)
-	CreatePhoneMfa(ctx context.Context, userId int, phone phonenumber.PhoneNumber, ownershipVerificationId string) (int, error)
-	GetMfaMethod(ctx context.Context, mfaId int) (any, error)
-	ChangeMfaMethodStatus(ctx context.Context, mfaId int, newStatus MfaStatus) (any, error)
-	GetAllMfaMethodsForUser(ctx context.Context, userId int) ([]any, error)
 
-	StartMfaSession(ctx context.Context, userId int, purpose MfaSessionPurpose, expiresAt time.Time)
-	AddPendingMfaSession(ctx context.Context, mfaSessionId uuid.UUID, mfaMethodId int, expiresAt time.Time, otpChallenge uuid.UUID)
+	CreateEmailMfa(ctx context.Context, userId int, email email.Email, ownershipVerificationId uuid.UUID) (int, error)
+	CreatePhoneMfa(ctx context.Context, userId int, phone phonenumber.PhoneNumber, ownershipVerificationId uuid.UUID) (int, error)
+
+	ChangeMfaMethodStatus(ctx context.Context, mfaId int, newStatus MfaStatus) error
+
+	GetMfaMethod(ctx context.Context, mfaId int) (database_queries.MfaGetMethodRow, error)
+	GetAllMfaMethodsForUser(ctx context.Context, userId int) ([]database_queries.MfaGetAllMfaMethodsForUserRow, error)
+
+	StartMfaSession(ctx context.Context, userId int, purpose MfaSessionPurpose, expiresAt time.Time) (uuid.UUID, error)
+	DeleteMfaSession(ctx context.Context, mfaSessionId uuid.UUID) error
+	AddPendingMfaSession(ctx context.Context, mfaSessionId uuid.UUID, mfaMethodId int, expiresAt time.Time, otpChallengeId uuid.UUID) (uuid.UUID, error)
+
+	LinkMfaSessionToToken(ctx context.Context, session session.Session, mfaSessionId uuid.UUID, expiresAt time.Time) error
+	GetMfaSessionFromToken(ctx context.Context, session session.Session) (uuid.UUID, error)
 
 	UseBackupCode(ctx context.Context, userId int, codeHash string) error
 	GenerateNewBackupCodes(ctx context.Context, userId int, hashedCodes []string) error
 
 	IsRememberedDevice(ctx context.Context, userId int, deviceFingerprint string) (bool, error)
-	RememberedDevice(ctx context.Context, userId int, deviceFingerprint string, expiresAt time.Time) (bool, error)
+	RememberDevice(ctx context.Context, userId int, deviceFingerprint string, expiresAt time.Time) error
 }
 
 type dataSourceImpl struct {
@@ -215,7 +223,7 @@ func (ds dataSourceImpl) CreatePasswordUser(ctx context.Context, userArgs Create
 	return user, err
 }
 
-func (ds dataSourceImpl) UpdateusernameForUser(ctx context.Context, id int32, newUsername string) error {
+func (ds dataSourceImpl) UpdateUsernameForUser(ctx context.Context, id int32, newUsername string) error {
 	return ds.db.Queries.UsersUpdateUsernameForUser(ctx, database_queries.UsersUpdateUsernameForUserParams{ID: id, Username: newUsername})
 }
 
@@ -302,7 +310,7 @@ func (ds dataSourceImpl) createNewSessionAndAttachUserToInstallation(
 		ctx,
 		database_queries.InstallationAttachSessionToInstallationByIdParams{
 			ID:       installationId,
-			AttachTo: pgtype.Int4{Int32: sessionId, Valid: true},
+			AttachTo: pgtype.Int8{Int64: sessionId, Valid: true},
 		},
 	)
 	if err != nil {
@@ -323,12 +331,12 @@ func (ds dataSourceImpl) createNewSessionAndAttachUserToInstallation(
 	return nil
 }
 
-func (ds dataSourceImpl) GetInstallationUsingTokenAndWhereAttachTo(ctx context.Context, installationToken string, attachedToSessionId int32) (database_queries.Installation, error) {
+func (ds dataSourceImpl) GetInstallationUsingTokenAndWhereAttachTo(ctx context.Context, installationToken string, attachedToSessionId int64) (database_queries.Installation, error) {
 	installation, err := ds.db.Queries.InstallationGetInstallationUsingTokenAndWhereAttachTo(
 		ctx,
 		database_queries.InstallationGetInstallationUsingTokenAndWhereAttachToParams{
 			InstallationToken: installationToken,
-			AttachTo:          pgtype.Int4{Int32: attachedToSessionId, Valid: true},
+			AttachTo:          pgtype.Int8{Int64: attachedToSessionId, Valid: true},
 		},
 	)
 
@@ -482,12 +490,12 @@ func (ds dataSourceImpl) DeleteForgetPasswordDataFromTempCache(ctx context.Conte
 	return ds.redis.Del(ctx, genTempForgetPasswordTmpDataStorId(dataId)).Err()
 }
 
-func (ds dataSourceImpl) ExpTokenAndUnlinkFromInstallation(ctx context.Context, installationId, tokenId int) (err error) {
+func (ds dataSourceImpl) ExpTokenAndUnlinkFromInstallation(ctx context.Context, installationId int, tokenId int64) (err error) {
 	return database.UseTransaction(
 		ctx,
 		ds.db,
 		func(queries *database_queries.Queries) error {
-			err = queries.SessionDeleteSession(ctx, int32(tokenId))
+			err = queries.SessionDeleteSession(ctx, tokenId)
 			if err != nil {
 				return err
 			}
@@ -496,7 +504,7 @@ func (ds dataSourceImpl) ExpTokenAndUnlinkFromInstallation(ctx context.Context, 
 				ctx,
 				database_queries.InstallationDetachSessionFromInstallationByIdParams{
 					ID:           int32(installationId),
-					LastAttachTo: pgtype.Int4{Int32: int32(tokenId), Valid: true},
+					LastAttachTo: pgtype.Int8{Int64: tokenId, Valid: true},
 				},
 			)
 			if err != nil {
@@ -778,4 +786,152 @@ func oidcLoginOnly(
 		RoleName:     oidcUser.UserRoleName,
 	}
 	return user, nil
+}
+
+func (ds dataSourceImpl) IsMfaEnabledForUser(ctx context.Context, userId int) (bool, error) {
+	count, err := ds.db.Queries.MfaCountVerifiedMfaForUser(ctx, int32(userId))
+	if err != nil {
+		if database.IsErrPgxNoRows(err) {
+			return false, nil
+		}
+		return false, err
+	}
+	return count >= 1, nil
+}
+
+func (ds dataSourceImpl) CreateEmailMfa(ctx context.Context, userId int, email email.Email, ownershipVerificationId uuid.UUID) (int, error) {
+	id, err := ds.db.Queries.MfaCreateTypeEmail(
+		ctx,
+		database_queries.MfaCreateTypeEmailParams{
+			Email:                 email.String(),
+			OwnershipVerification: ownershipVerificationId,
+			UserID:                int32(userId),
+		},
+	)
+	return int(id), err
+}
+
+func (ds dataSourceImpl) CreatePhoneMfa(ctx context.Context, userId int, phone phonenumber.PhoneNumber, ownershipVerificationId uuid.UUID) (int, error) {
+	id, err := ds.db.Queries.MfaCreateTypeEmail(
+		ctx,
+		database_queries.MfaCreateTypeEmailParams{
+			Email:                 phone.ToE164(),
+			OwnershipVerification: ownershipVerificationId,
+			UserID:                int32(userId),
+		},
+	)
+	return int(id), err
+}
+
+func (ds dataSourceImpl) ChangeMfaMethodStatus(ctx context.Context, mfaId int, newStatus MfaStatus) error {
+	return ds.db.Queries.MfaChangeMfaMethodStatus(
+		ctx,
+		database_queries.MfaChangeMfaMethodStatusParams{
+			ID:        int32(mfaId),
+			NewStatus: newStatus.String(),
+		},
+	)
+}
+
+func (ds dataSourceImpl) GetMfaMethod(ctx context.Context, mfaId int) (database_queries.MfaGetMethodRow, error) {
+	return ds.db.Queries.MfaGetMethod(ctx, int32(mfaId))
+}
+
+func (ds dataSourceImpl) GetAllMfaMethodsForUser(ctx context.Context, userId int) ([]database_queries.MfaGetAllMfaMethodsForUserRow, error) {
+	return ds.db.Queries.MfaGetAllMfaMethodsForUser(ctx, int32(userId))
+
+}
+
+func (ds dataSourceImpl) StartMfaSession(ctx context.Context, userId int, purpose MfaSessionPurpose, expiresAt time.Time) (uuid.UUID, error) {
+	return ds.db.Queries.MfaStartMfaSession(
+		ctx,
+		database_queries.MfaStartMfaSessionParams{
+			UserID:    int32(userId),
+			Purpose:   purpose.String(),
+			ExpiresAt: database.ToPgTypeTimestamptz(expiresAt),
+		},
+	)
+}
+
+func (ds dataSourceImpl) DeleteMfaSession(ctx context.Context, mfaSessionId uuid.UUID) error {
+	return ds.db.Queries.MfaDeleteMfaSession(ctx, mfaSessionId)
+}
+
+func (ds dataSourceImpl) AddPendingMfaSession(ctx context.Context, mfaSessionId uuid.UUID, mfaMethodId int, expiresAt time.Time, otpChallengeId uuid.UUID) (uuid.UUID, error) {
+	return mfaSessionId, ds.db.Queries.MfaAddPendingMfaSession(
+		ctx,
+		database_queries.MfaAddPendingMfaSessionParams{
+			MfaSession:   mfaSessionId,
+			MfaMethod:    int32(mfaMethodId),
+			OtpChallenge: database.ToPgTypeUUID(otpChallengeId),
+			ExpiresAt:    database.ToPgTypeTimestamptz(expiresAt),
+		},
+	)
+}
+
+func (ds dataSourceImpl) LinkMfaSessionToToken(ctx context.Context, session session.Session, mfaSessionId uuid.UUID, expiresAt time.Time) error {
+	return session.StoreAttr(ctx, time.Until(expiresAt), "mfa_session_uuid", mfaSessionId.String())
+}
+
+func (ds dataSourceImpl) GetMfaSessionFromToken(ctx context.Context, session session.Session) (uuid.UUID, error) {
+	uuidStr, err := session.GetAttr(ctx, "mfa_session_uuid")
+	if err != nil || uuidStr == "" {
+		return uuid.Nil, err
+	}
+	return uuid.Parse(uuidStr)
+}
+
+func (ds dataSourceImpl) UseBackupCode(ctx context.Context, userId int, codeHash string) error {
+	return ds.db.Queries.MfaUseBackupCode(
+		ctx, database_queries.MfaUseBackupCodeParams{
+			UserID:   int32(userId),
+			CodeHash: codeHash,
+		},
+	)
+}
+
+func (ds dataSourceImpl) GenerateNewBackupCodes(ctx context.Context, userId int, hashedCodes []string) error {
+	return database.UseTransaction(
+		ctx,
+		ds.db,
+		func(queries *database_queries.Queries) error {
+			err := queries.MfaDeleteAllBackupCodesForUser(ctx, int32(userId))
+			if err != nil {
+				if !database.IsErrPgxNoRows(err) {
+					return err
+				}
+			}
+			backupCodes := make([]database_queries.MfaInsertBackupCodesParams, len(hashedCodes))
+			for i, hashCode := range hashedCodes {
+				backupCodes[i] = database_queries.MfaInsertBackupCodesParams{UserID: int32(userId), CodeHash: hashCode}
+			}
+			_, err = queries.MfaInsertBackupCodes(
+				ctx,
+				backupCodes,
+			)
+			return err
+		},
+	)
+}
+
+func (ds dataSourceImpl) IsRememberedDevice(ctx context.Context, userId int, deviceFingerprint string) (bool, error) {
+	err := ds.db.Queries.MfaUpdateLastUsedForRememberDevice(
+		ctx,
+		database_queries.MfaUpdateLastUsedForRememberDeviceParams{
+			UserID:            int32(userId),
+			DeviceFingerprint: deviceFingerprint,
+			LastUsed:          database.ToPgTypeTimestamptz(time.Now().UTC()),
+		},
+	)
+	return err == nil, err
+}
+
+func (ds dataSourceImpl) RememberDevice(ctx context.Context, userId int, deviceFingerprint string, expiresAt time.Time) error {
+	return ds.db.Queries.MfaRememberDevice(
+		ctx, database_queries.MfaRememberDeviceParams{
+			UserID:            int32(userId),
+			DeviceFingerprint: deviceFingerprint,
+			ExpiresAt:         database.ToPgTypeTimestamptz(expiresAt),
+		},
+	)
 }
