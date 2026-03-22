@@ -20,6 +20,7 @@ import (
 
 const (
 	ExpirationForTempUser               = time.Minute * 30
+	ExpirationForMfaVerification        = time.Minute * 30
 	ExpirationForForgetPasswordTempData = time.Minute * 15
 )
 
@@ -28,7 +29,7 @@ type DataSource interface {
 
 	GetUserById(ctx context.Context, id int32) (database_queries.UsersGetUserByIdRow, error)
 
-	GetUserAndSessionDataBySessionToken(ctx context.Context, sessionToken string, sessionPurpose SessionPurpose) (database_queries.UsersGetUserAndSessionDataBySessionTokenRow, error)
+	GetUserAndSessionDataBySessionToken(ctx context.Context, sessionToken session.Session, sessionPurpose SessionPurpose) (database_queries.UsersGetUserAndSessionDataBySessionTokenRow, error)
 
 	GetUserFromTempCache(ctx context.Context, tempUserId uuid.UUID) (*TempPasswordUser, error)
 	GetForgetPasswordDataFromTempCache(ctx context.Context, dataId uuid.UUID) (*ForgetPasswordTmpDataStore, error)
@@ -72,17 +73,18 @@ type DataSource interface {
 	// mfa
 	IsMfaEnabledForUser(ctx context.Context, userId int) (bool, error)
 
-	CreateEmailMfa(ctx context.Context, userId int, email email.Email, ownershipVerificationId uuid.UUID) (int, error)
-	CreatePhoneMfa(ctx context.Context, userId int, phone phonenumber.PhoneNumber, ownershipVerificationId uuid.UUID) (int, error)
+	CreateEmailMfa(ctx context.Context, userId int, email email.Email, ownershipVerificationId uuid.UUID) (id int32, err error)
+	CreatePhoneMfa(ctx context.Context, userId int, phone phonenumber.PhoneNumber, ownershipVerificationId uuid.UUID) (id int32, err error)
 
 	ChangeMfaMethodStatus(ctx context.Context, mfaId int, newStatus MfaStatus) error
 
-	GetMfaMethod(ctx context.Context, mfaId int) (database_queries.MfaGetMethodRow, error)
+	GetMfaMethod(ctx context.Context, userId, mfaId int32) (database_queries.MfaGetMethodRow, error)
 	GetAllMfaMethodsForUser(ctx context.Context, userId int) ([]database_queries.MfaGetAllMfaMethodsForUserRow, error)
+	MfaGetActiveAllMfaMethodsForUser(ctx context.Context, userId int) ([]database_queries.MfaGetActiveAllMfaMethodsForUserRow, error)
 
-	StartMfaSession(ctx context.Context, userId int, purpose MfaSessionPurpose, expiresAt time.Time) (uuid.UUID, error)
+	StartMfaSession(ctx context.Context, userId int, purpose MfaSessionPurpose, expiresAt time.Time) (id uuid.UUID, err error)
 	DeleteMfaSession(ctx context.Context, mfaSessionId uuid.UUID) error
-	AddPendingMfaSession(ctx context.Context, mfaSessionId uuid.UUID, mfaMethodId int, expiresAt time.Time, otpChallengeId uuid.UUID) (uuid.UUID, error)
+	AddPendingMfaSession(ctx context.Context, mfaSessionId uuid.UUID, mfaMethodId int32, expiresAt time.Time, otpChallengeId uuid.UUID) (id uuid.UUID, err error)
 
 	LinkMfaSessionToToken(ctx context.Context, session session.Session, mfaSessionId uuid.UUID, expiresAt time.Time) error
 	GetMfaSessionFromToken(ctx context.Context, session session.Session) (uuid.UUID, error)
@@ -114,11 +116,11 @@ func (ds dataSourceImpl) GetUserById(ctx context.Context, id int32) (database_qu
 	return dbUser, nil
 }
 
-func (ds dataSourceImpl) GetUserAndSessionDataBySessionToken(ctx context.Context, sessionToken string, sessionPurpose SessionPurpose) (database_queries.UsersGetUserAndSessionDataBySessionTokenRow, error) {
+func (ds dataSourceImpl) GetUserAndSessionDataBySessionToken(ctx context.Context, sessionToken session.Session, sessionPurpose SessionPurpose) (database_queries.UsersGetUserAndSessionDataBySessionTokenRow, error) {
 	userWithSessionData, err := ds.db.Queries.UsersGetUserAndSessionDataBySessionToken(
 		ctx,
 		database_queries.UsersGetUserAndSessionDataBySessionTokenParams{
-			Token:        sessionToken,
+			Token:        sessionToken.String(),
 			TokenPurpose: sessionPurpose.String(),
 		},
 	)
@@ -799,8 +801,8 @@ func (ds dataSourceImpl) IsMfaEnabledForUser(ctx context.Context, userId int) (b
 	return count >= 1, nil
 }
 
-func (ds dataSourceImpl) CreateEmailMfa(ctx context.Context, userId int, email email.Email, ownershipVerificationId uuid.UUID) (int, error) {
-	id, err := ds.db.Queries.MfaCreateTypeEmail(
+func (ds dataSourceImpl) CreateEmailMfa(ctx context.Context, userId int, email email.Email, ownershipVerificationId uuid.UUID) (id int32, err error) {
+	return ds.db.Queries.MfaCreateTypeEmail(
 		ctx,
 		database_queries.MfaCreateTypeEmailParams{
 			Email:                 email.String(),
@@ -808,11 +810,10 @@ func (ds dataSourceImpl) CreateEmailMfa(ctx context.Context, userId int, email e
 			UserID:                int32(userId),
 		},
 	)
-	return int(id), err
 }
 
-func (ds dataSourceImpl) CreatePhoneMfa(ctx context.Context, userId int, phone phonenumber.PhoneNumber, ownershipVerificationId uuid.UUID) (int, error) {
-	id, err := ds.db.Queries.MfaCreateTypeEmail(
+func (ds dataSourceImpl) CreatePhoneMfa(ctx context.Context, userId int, phone phonenumber.PhoneNumber, ownershipVerificationId uuid.UUID) (id int32, err error) {
+	return ds.db.Queries.MfaCreateTypeEmail(
 		ctx,
 		database_queries.MfaCreateTypeEmailParams{
 			Email:                 phone.ToE164(),
@@ -820,7 +821,6 @@ func (ds dataSourceImpl) CreatePhoneMfa(ctx context.Context, userId int, phone p
 			UserID:                int32(userId),
 		},
 	)
-	return int(id), err
 }
 
 func (ds dataSourceImpl) ChangeMfaMethodStatus(ctx context.Context, mfaId int, newStatus MfaStatus) error {
@@ -833,16 +833,19 @@ func (ds dataSourceImpl) ChangeMfaMethodStatus(ctx context.Context, mfaId int, n
 	)
 }
 
-func (ds dataSourceImpl) GetMfaMethod(ctx context.Context, mfaId int) (database_queries.MfaGetMethodRow, error) {
-	return ds.db.Queries.MfaGetMethod(ctx, int32(mfaId))
+func (ds dataSourceImpl) GetMfaMethod(ctx context.Context, userId, mfaId int32) (database_queries.MfaGetMethodRow, error) {
+	return ds.db.Queries.MfaGetMethod(ctx, database_queries.MfaGetMethodParams{ID: mfaId, UserID: userId})
 }
 
 func (ds dataSourceImpl) GetAllMfaMethodsForUser(ctx context.Context, userId int) ([]database_queries.MfaGetAllMfaMethodsForUserRow, error) {
 	return ds.db.Queries.MfaGetAllMfaMethodsForUser(ctx, int32(userId))
-
 }
 
-func (ds dataSourceImpl) StartMfaSession(ctx context.Context, userId int, purpose MfaSessionPurpose, expiresAt time.Time) (uuid.UUID, error) {
+func (ds dataSourceImpl) MfaGetActiveAllMfaMethodsForUser(ctx context.Context, userId int) ([]database_queries.MfaGetActiveAllMfaMethodsForUserRow, error) {
+	return ds.db.Queries.MfaGetActiveAllMfaMethodsForUser(ctx, int32(userId))
+}
+
+func (ds dataSourceImpl) StartMfaSession(ctx context.Context, userId int, purpose MfaSessionPurpose, expiresAt time.Time) (id uuid.UUID, err error) {
 	return ds.db.Queries.MfaStartMfaSession(
 		ctx,
 		database_queries.MfaStartMfaSessionParams{
@@ -857,12 +860,12 @@ func (ds dataSourceImpl) DeleteMfaSession(ctx context.Context, mfaSessionId uuid
 	return ds.db.Queries.MfaDeleteMfaSession(ctx, mfaSessionId)
 }
 
-func (ds dataSourceImpl) AddPendingMfaSession(ctx context.Context, mfaSessionId uuid.UUID, mfaMethodId int, expiresAt time.Time, otpChallengeId uuid.UUID) (uuid.UUID, error) {
+func (ds dataSourceImpl) AddPendingMfaSession(ctx context.Context, mfaSessionId uuid.UUID, mfaMethodId int32, expiresAt time.Time, otpChallengeId uuid.UUID) (id uuid.UUID, err error) {
 	return mfaSessionId, ds.db.Queries.MfaAddPendingMfaSession(
 		ctx,
 		database_queries.MfaAddPendingMfaSessionParams{
 			MfaSession:   mfaSessionId,
-			MfaMethod:    int32(mfaMethodId),
+			MfaMethod:    mfaMethodId,
 			OtpChallenge: database.ToPgTypeUUID(otpChallengeId),
 			ExpiresAt:    database.ToPgTypeTimestamptz(expiresAt),
 		},

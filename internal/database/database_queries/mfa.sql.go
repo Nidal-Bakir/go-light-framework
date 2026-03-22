@@ -313,6 +313,91 @@ func (q *Queries) MfaDeleteMfaSession(ctx context.Context, id uuid.UUID) error {
 	return err
 }
 
+const mfaGetActiveAllMfaMethodsForUser = `-- name: MfaGetActiveAllMfaMethodsForUser :many
+SELECT
+  m.id AS id,
+  m.status AS status,
+  m.method_type AS method_type,
+  m.user_id AS user_id,
+  m.label AS label,
+  e.email AS method_email_email,
+  p.phone AS method_phone_phone,
+  t.algorithm AS method_totp_algorithm,
+  h.algorithm AS method_hotp_algorithm
+FROM
+  mfa_method AS m
+  LEFT JOIN mfa_method_type_email AS e ON e.id = m.id
+  LEFT JOIN mfa_method_type_phone AS p ON p.id = m.id
+  LEFT JOIN mfa_method_type_totp AS t ON t.id = m.id
+  LEFT JOIN mfa_method_type_hotp AS h ON h.id = m.id
+WHERE
+  m.user_id = $1::INT
+  AND m.status = 'verified'
+`
+
+type MfaGetActiveAllMfaMethodsForUserRow struct {
+	ID                  int32       `json:"id"`
+	Status              string      `json:"status"`
+	MethodType          string      `json:"method_type"`
+	UserID              int32       `json:"user_id"`
+	Label               string      `json:"label"`
+	MethodEmailEmail    pgtype.Text `json:"method_email_email"`
+	MethodPhonePhone    pgtype.Text `json:"method_phone_phone"`
+	MethodTotpAlgorithm pgtype.Text `json:"method_totp_algorithm"`
+	MethodHotpAlgorithm pgtype.Text `json:"method_hotp_algorithm"`
+}
+
+// MfaGetActiveAllMfaMethodsForUser
+//
+//	SELECT
+//	  m.id AS id,
+//	  m.status AS status,
+//	  m.method_type AS method_type,
+//	  m.user_id AS user_id,
+//	  m.label AS label,
+//	  e.email AS method_email_email,
+//	  p.phone AS method_phone_phone,
+//	  t.algorithm AS method_totp_algorithm,
+//	  h.algorithm AS method_hotp_algorithm
+//	FROM
+//	  mfa_method AS m
+//	  LEFT JOIN mfa_method_type_email AS e ON e.id = m.id
+//	  LEFT JOIN mfa_method_type_phone AS p ON p.id = m.id
+//	  LEFT JOIN mfa_method_type_totp AS t ON t.id = m.id
+//	  LEFT JOIN mfa_method_type_hotp AS h ON h.id = m.id
+//	WHERE
+//	  m.user_id = $1::INT
+//	  AND m.status = 'verified'
+func (q *Queries) MfaGetActiveAllMfaMethodsForUser(ctx context.Context, userID int32) ([]MfaGetActiveAllMfaMethodsForUserRow, error) {
+	rows, err := q.db.Query(ctx, mfaGetActiveAllMfaMethodsForUser, userID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []MfaGetActiveAllMfaMethodsForUserRow{}
+	for rows.Next() {
+		var i MfaGetActiveAllMfaMethodsForUserRow
+		if err := rows.Scan(
+			&i.ID,
+			&i.Status,
+			&i.MethodType,
+			&i.UserID,
+			&i.Label,
+			&i.MethodEmailEmail,
+			&i.MethodPhonePhone,
+			&i.MethodTotpAlgorithm,
+			&i.MethodHotpAlgorithm,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const mfaGetAllMfaMethodsForUser = `-- name: MfaGetAllMfaMethodsForUser :many
 SELECT
   m.id AS id,
@@ -415,7 +500,13 @@ FROM
   LEFT JOIN mfa_method_type_hotp AS h ON m.id = h.id
 WHERE
   m.id = $1::INT
+  AND m.user_id = $2::INT
 `
+
+type MfaGetMethodParams struct {
+	ID     int32 `json:"id"`
+	UserID int32 `json:"user_id"`
+}
 
 type MfaGetMethodRow struct {
 	ID                  int32       `json:"id"`
@@ -449,8 +540,9 @@ type MfaGetMethodRow struct {
 //	  LEFT JOIN mfa_method_type_hotp AS h ON m.id = h.id
 //	WHERE
 //	  m.id = $1::INT
-func (q *Queries) MfaGetMethod(ctx context.Context, id int32) (MfaGetMethodRow, error) {
-	row := q.db.QueryRow(ctx, mfaGetMethod, id)
+//	  AND m.user_id = $2::INT
+func (q *Queries) MfaGetMethod(ctx context.Context, arg MfaGetMethodParams) (MfaGetMethodRow, error) {
+	row := q.db.QueryRow(ctx, mfaGetMethod, arg.ID, arg.UserID)
 	var i MfaGetMethodRow
 	err := row.Scan(
 		&i.ID,

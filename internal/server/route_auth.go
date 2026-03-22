@@ -556,6 +556,7 @@ type passwordLoginParams struct {
 	Email             *email.Email
 	PhoneNumber       *phonenumber.PhoneNumber
 	Password          string
+	deviceFingerprint string
 }
 
 func passwordLogin(authRepo auth.Repository) http.HandlerFunc {
@@ -577,11 +578,12 @@ func passwordLogin(authRepo auth.Repository) http.HandlerFunc {
 		installation := auth.MustInstallationFromContext(ctx)
 		requestIpAddres := tracker.MustReqIPFromContext(ctx)
 
-		user, token, err := authRepo.PasswordLogin(
+		user, shouldUseMfa, token, err := authRepo.PasswordLogin(
 			ctx,
 			auth.PasswordLoginAccessKey{Phone: loginParam.PhoneNumber, Email: loginParam.Email, LoginIdentityType: loginParam.LoginIdentityType},
 			loginParam.Password,
 			requestIpAddres,
+			loginParam.deviceFingerprint,
 			installation,
 		)
 		if err != nil {
@@ -601,7 +603,7 @@ func passwordLogin(authRepo auth.Repository) http.HandlerFunc {
 			User  publicUser `json:"user"`
 			Token string     `json:"token"`
 		}{
-			User:  NewPublicUserFromAuthUser(user),
+			User:  NewPublicUserFromAuthUser(*user),
 			Token: token,
 		}
 		writeResponse(ctx, w, r, http.StatusCreated, response)
@@ -610,7 +612,7 @@ func passwordLogin(authRepo auth.Repository) http.HandlerFunc {
 
 func validatePasswordLoginParam(r *http.Request) (passwordLoginParams, []error) {
 	loginParam := passwordLoginParams{}
-	errList := make([]error, 0, 3)
+	errList := make([]error, 0, 4)
 
 	loginIdentityTypeFormStr := r.FormValue("login_identity_type")
 	loginIdentityType, err := new(auth.LoginIdentityType).FromString(loginIdentityTypeFormStr)
@@ -622,6 +624,8 @@ func validatePasswordLoginParam(r *http.Request) (passwordLoginParams, []error) 
 
 	loginParam.Password = r.FormValue("password")
 	errList = append(errList, validatePassword(loginParam.Password)...)
+
+	loginParam.deviceFingerprint = r.FormValue("device_fingerprint")
 
 	loginIdentityType.FoldOr(
 		auth.LoginIdentityFoldActions{

@@ -45,13 +45,13 @@ func authBySessionPurpose(authRepo auth.Repository, sessionPurpose auth.SessionP
 				authStr = cookieVal
 			}
 
-			token := StripBearerToken(authStr)
-			if token == "" {
+			rawToken := StripBearerToken(authStr)
+			if rawToken == "" {
 				sendUnauthorizedError()
 				return
 			}
 
-			_, err := authRepo.VerifyAuthToken(ctx, token, sessionPurpose)
+			sessionToken, err := authRepo.VerifyAuthToken(ctx, rawToken, sessionPurpose)
 			if err != nil {
 				if appenv.IsStagOrLocal() {
 					zlog.Error().Err(err).Msg("Error from jwt verify function")
@@ -60,7 +60,7 @@ func authBySessionPurpose(authRepo auth.Repository, sessionPurpose auth.SessionP
 				return
 			}
 
-			userAndSessionData, err := authRepo.GetUserAndSessionDataBySessionToken(ctx, token, sessionPurpose)
+			userAndSessionData, err := authRepo.GetUserAndSessionDataBySessionToken(ctx, sessionToken, sessionPurpose)
 			if err != nil {
 				if errors.Is(err, apperr.ErrNoResult) {
 					err = fmt.Errorf("unauthorized")

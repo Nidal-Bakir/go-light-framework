@@ -94,7 +94,8 @@ FROM
   LEFT JOIN mfa_method_type_totp AS t ON m.id = t.id
   LEFT JOIN mfa_method_type_hotp AS h ON m.id = h.id
 WHERE
-  m.id = @id::INT;
+  m.id = @id::INT
+  AND m.user_id = @user_id::INT;
 
 -- name: MfaGetAllMfaMethodsForUser :many
 SELECT
@@ -115,6 +116,28 @@ FROM
   LEFT JOIN mfa_method_type_hotp AS h ON h.id = m.id
 WHERE
   m.user_id = @user_id::INT;
+
+
+-- name: MfaGetActiveAllMfaMethodsForUser :many
+SELECT
+  m.id AS id,
+  m.status AS status,
+  m.method_type AS method_type,
+  m.user_id AS user_id,
+  m.label AS label,
+  e.email AS method_email_email,
+  p.phone AS method_phone_phone,
+  t.algorithm AS method_totp_algorithm,
+  h.algorithm AS method_hotp_algorithm
+FROM
+  mfa_method AS m
+  LEFT JOIN mfa_method_type_email AS e ON e.id = m.id
+  LEFT JOIN mfa_method_type_phone AS p ON p.id = m.id
+  LEFT JOIN mfa_method_type_totp AS t ON t.id = m.id
+  LEFT JOIN mfa_method_type_hotp AS h ON h.id = m.id
+WHERE
+  m.user_id = @user_id::INT
+  AND m.status = 'verified';
 
 -- name: MfaStartMfaSession :one
 INSERT INTO

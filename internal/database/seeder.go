@@ -7,8 +7,8 @@ import (
 
 	"github.com/Nidal-Bakir/go-todo-backend/internal/appenv"
 	"github.com/Nidal-Bakir/go-todo-backend/internal/database/database_queries"
-	"github.com/Nidal-Bakir/go-todo-backend/internal/perm/baseperm"
 	"github.com/Nidal-Bakir/go-todo-backend/internal/feat/settings/labels"
+	"github.com/Nidal-Bakir/go-todo-backend/internal/perm/baseperm"
 
 	"github.com/jackc/pgx/v5"
 	"github.com/rs/zerolog"

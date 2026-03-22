@@ -33,6 +33,7 @@ const (
 	aMounth                      = aDay * 30
 	aYear                        = aMounth * 12
 	AuthTokenExpDuration         = aYear
+	MfaTokenExpDuration          = time.Minute * 30
 	InstallationTokenExpDuration = aYear
 
 	OtpCodeLength             = 6
@@ -41,10 +42,10 @@ const (
 
 type Repository interface {
 	GetUserById(ctx context.Context, id int) (User, error)
-	GetUserAndSessionDataBySessionToken(ctx context.Context, sessionToken string, sessionPurpose SessionPurpose) (UserAndSession, error)
+	GetUserAndSessionDataBySessionToken(ctx context.Context, sessionToken session.Session, sessionPurpose SessionPurpose) (UserAndSession, error)
 	CreateTempPasswordUser(ctx context.Context, tUser *TempPasswordUser) (*TempPasswordUser, error)
 	CreatePasswordUser(ctx context.Context, tempUserId uuid.UUID, otp string) (User, error)
-	PasswordLogin(ctx context.Context, accessKey PasswordLoginAccessKey, password string, ipAddress netip.Addr, installation Installation) (user *User, shouldUseMfa bool, token string, err error)
+	PasswordLogin(ctx context.Context, accessKey PasswordLoginAccessKey, password string, ipAddress netip.Addr, deviceFingerprint string, installation Installation) (user *User, shouldUseMfa bool, token string, err error)
 	GetInstallationUsingToken(ctx context.Context, installationToken string, attachedToSessionId *int64) (Installation, error)
 	ChangePasswordForAllPasswordLoginIdentities(ctx context.Context, userID int, oldPassword, newPassword string) error
 	VerifyAuthToken(ctx context.Context, token string, sessionPurpose SessionPurpose) (session.Session, error)
@@ -56,6 +57,13 @@ type Repository interface {
 	ResetPassword(ctx context.Context, id uuid.UUID, providedOTP, newPassword string) error
 	GetAllLoginIdentitiesForUser(ctx context.Context, userId int) ([]PublicLoginOptionForProfile, error)
 	LoginOrCreateUserWithOidc(ctx context.Context, ipAddress netip.Addr, installation Installation, data LoginOrCreateUserWithOidcRepoParam) (user User, token string, err error)
+
+	CreateEmailMfa(ctx context.Context, userId int, email email.Email) (id int32, err error)
+
+	GetAllMfaMethodsForUser(ctx context.Context, userId int) ([]database_queries.MfaGetAllMfaMethodsForUserRow, error)
+	MfaGetActiveAllMfaMethodsForUser(ctx context.Context, userId int) ([]database_queries.MfaGetActiveAllMfaMethodsForUserRow, error)
+
+	AddPendingMfaSession(ctx context.Context, sessionToken session.Session, userId, mfaMethodId int32) error
 }
 
 func NewRepository(
@@ -118,7 +126,7 @@ func (repo repositoryImpl) GetUserById(ctx context.Context, id int) (User, error
 	return user, nil
 }
 
-func (repo repositoryImpl) GetUserAndSessionDataBySessionToken(ctx context.Context, sessionToken string, sessionPurpose SessionPurpose) (UserAndSession, error) {
+func (repo repositoryImpl) GetUserAndSessionDataBySessionToken(ctx context.Context, sessionToken session.Session, sessionPurpose SessionPurpose) (UserAndSession, error) {
 	zlog := zerolog.Ctx(ctx)
 
 	userAndSessionDataFromDB, err := repo.dataSource.GetUserAndSessionDataBySessionToken(ctx, sessionToken, sessionPurpose)
@@ -256,6 +264,9 @@ func sendOtp(
 			Purpose:     otpPurpose,
 			Otp:         otpToSend,
 		})
+	if err != nil {
+		zlog.Err(err).Msgf("error while sending the otp")
+	}
 
 	return sentOtpId, err
 }
@@ -384,6 +395,7 @@ func (repo repositoryImpl) PasswordLogin(
 	passwordLoginAccessKey PasswordLoginAccessKey,
 	password string,
 	ipAddress netip.Addr,
+	deviceFingerprint string,
 	installation Installation,
 ) (user *User, shouldUseMfa bool, token string, err error) {
 	zlog := zerolog.Ctx(ctx)
@@ -419,9 +431,41 @@ func (repo repositoryImpl) PasswordLogin(
 		return nil, false, "", err
 	}
 
-	// check if the user have mfa enapled
+	isEnabled, err := repo.dataSource.IsMfaEnabledForUser(ctx, int(userWithLoginIdentity.UserID))
+	if err != nil {
+		zlog.Err(err).Msg("error while checking if the user have mfa enabled")
+		return nil, false, "", err
+	}
+	if isEnabled {
+		isRememberedDevice := false
 
-	repo.dataSource.IsMfaEnabledForUser(ctx, int(userWithLoginIdentity.UserID))
+		if deviceFingerprint != "" {
+			isRememberedDevice, err = repo.dataSource.IsRememberedDevice(ctx, int(userWithLoginIdentity.UserID), deviceFingerprint)
+			if err != nil {
+				isRememberedDevice = false
+				zlog.Err(err).Msg("error while checking the device is a remembered device")
+				// will only log the error but we will not stop the flow
+			}
+		}
+
+		if !isRememberedDevice {
+			mfaSessionToken, expiresAt, err := repo.generateAuthToken(ctx, userWithLoginIdentity.UserID, MfaTokenExpDuration, SessionPurposeMFA)
+			if err != nil {
+				return nil, false, "", err
+			}
+			mfaSessionId, err := repo.dataSource.StartMfaSession(ctx, int(userWithLoginIdentity.UserID), MfaSessionPurposeLogin, expiresAt)
+			if err != nil {
+				zlog.Err(err).Msg("error while starting mfa session")
+				return nil, false, "", err
+			}
+			err = repo.dataSource.LinkMfaSessionToToken(ctx, mfaSessionToken, mfaSessionId, expiresAt)
+			if err != nil {
+				zlog.Err(err).Msg("error while storing the mfa session on the session")
+				return nil, false, "", err
+			}
+			return nil, isEnabled, mfaSessionToken.String(), nil
+		}
+	}
 
 	sessionToken, expiresAt, err := repo.generateAuthToken(ctx, userWithLoginIdentity.UserID, AuthTokenExpDuration, SessionPurposeLogin)
 	if err != nil {
@@ -754,8 +798,8 @@ func (repo repositoryImpl) LoginOrCreateUserWithOidc(
 		ctx,
 		data,
 		func(userId int32) (string, time.Time, error) {
-			t, exp, err := repo.generateAuthLoginToken(ctx, userId)
-			token = t
+			t, exp, err := repo.generateAuthToken(ctx, userId, AuthTokenExpDuration, SessionPurposeLogin)
+			token = t.String()
 			return token, exp, err
 		},
 	)
@@ -768,4 +812,104 @@ func (repo repositoryImpl) LoginOrCreateUserWithOidc(
 	user := NewUserFromDatabaseUser(dbUser)
 
 	return user, token, nil
+}
+
+func (repo repositoryImpl) CreateEmailMfa(ctx context.Context, userId int, email email.Email) (id int32, err error) {
+	zlog := zerolog.Ctx(ctx)
+
+	otpId, err := sendOtp(
+		ctx,
+		repo.gatewaysProviderFactory,
+		repo.otpStoreProviderDb,
+		PasswordLoginAccessKey{LoginIdentityType: LoginIdentityTypeEmail, Email: &email},
+		otp.MfaVerification,
+		ExpirationForMfaVerification,
+	)
+	if err != nil {
+		zlog.Err(err).Msg("error can not send the otp to verify the email mfa")
+		return -1, err
+	}
+
+	id, err = repo.dataSource.CreateEmailMfa(ctx, userId, email, otpId)
+	if err != nil {
+		zlog.Err(err).Msg("error can not create email mfa")
+		return -1, err
+	}
+
+	return id, nil
+}
+
+func (repo repositoryImpl) GetAllMfaMethodsForUser(ctx context.Context, userId int) ([]database_queries.MfaGetAllMfaMethodsForUserRow, error) {
+	zlog := zerolog.Ctx(ctx)
+	result, err := repo.dataSource.GetAllMfaMethodsForUser(ctx, userId)
+	if err != nil {
+		zlog.Err(err).Msg("error can not get all the mfa methods for a user")
+	}
+	return result, err
+}
+
+func (repo repositoryImpl) MfaGetActiveAllMfaMethodsForUser(ctx context.Context, userId int) ([]database_queries.MfaGetActiveAllMfaMethodsForUserRow, error) {
+	zlog := zerolog.Ctx(ctx)
+	result, err := repo.dataSource.MfaGetActiveAllMfaMethodsForUser(ctx, userId)
+	if err != nil {
+		zlog.Err(err).Msg("error can not get all the active mfa methods for a user")
+	}
+	return result, err
+}
+
+func (repo repositoryImpl) AddPendingMfaSession(ctx context.Context, sessionToken session.Session, userId, mfaMethodId int32) error {
+	zlog := zerolog.Ctx(ctx)
+
+	mfaSessionId, err := repo.dataSource.GetMfaSessionFromToken(ctx, sessionToken)
+	if err != nil {
+		zlog.Err(err).Msg("error can not get the mfa session from the token")
+		return err
+	}
+	if mfaSessionId == uuid.Nil {
+		return apperr.ErrNoResult
+	}
+
+	result, err := repo.dataSource.GetMfaMethod(ctx, userId, mfaMethodId)
+	if err != nil {
+		zlog.Err(err).Msg("error can get mfa method details")
+		return err
+	}
+
+	//
+	// TODO: we should check if the mfa method is alredy added
+	// if this is the case we need to update its data if needed
+	// like resending otp if the time limit allows for that!
+	//
+
+	otpId := uuid.Nil
+
+	if result.MethodType == MfaMethodTypeEmail.String() || result.MethodType == MfaMethodTypePhone.String() {
+		accessKey := PasswordLoginAccessKey{}
+		if result.MethodType == MfaMethodTypeEmail.String() {
+			accessKey.LoginIdentityType = LoginIdentityTypeEmail
+			accessKey.Email = email.MustParse(result.MethodEmailEmail.String)
+		} else {
+			accessKey.LoginIdentityType = LoginIdentityTypePhone
+			accessKey.Phone = phonenumber.MustParse(result.MethodPhonePhone.String)
+		}
+
+		otpId, err = sendOtp(
+			ctx,
+			repo.gatewaysProviderFactory,
+			repo.otpStoreProviderCache,
+			accessKey,
+			otp.MfaEmailOtp,
+			ExpirationForMfaVerification,
+		)
+		if err != nil {
+			zlog.Err(err).Msg("error can not send the otp to verify the email mfa")
+			return err
+		}
+	}
+
+	_, err = repo.dataSource.AddPendingMfaSession(ctx, mfaSessionId, mfaMethodId, time.Now().Add(MfaTokenExpDuration), otpId)
+	if err != nil {
+		zlog.Err(err).Msg("error can not add pending mfa session")
+	}
+	return err
 }

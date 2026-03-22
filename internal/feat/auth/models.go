@@ -53,6 +53,20 @@ func (s MfaStatus) String() string {
 	return string(s)
 }
 
+type MfaMethodType string
+
+const (
+	MfaMethodTypeEmail    MfaMethodType = "email"
+	MfaMethodTypePhone    MfaMethodType = "phone"
+	MfaMethodTypeTotp     MfaMethodType = "totp"
+	MfaMethodTypeHotp     MfaMethodType = "hotp"
+	MfaMethodTypeWebauthn MfaMethodType = "webauthn"
+)
+
+func (s MfaMethodType) String() string {
+	return string(s)
+}
+
 type LoginIdentityType string
 
 const (

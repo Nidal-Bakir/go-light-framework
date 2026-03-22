@@ -27,7 +27,7 @@ func (s dbStore) StoreAttr(ctx context.Context, session string, expiresAfter tim
 		return s.db.Queries.SessionStoreStoreAttr(
 			ctx,
 			database_queries.SessionStoreStoreAttrParams{
-				Session:     session,
+				Session:   session,
 				AttrKey:   fields[0],
 				AttrValue: fields[1],
 				ExpiresAt: database.ToPgTypeTimestamptz(time.Now().UTC().Add(expiresAfter)),
@@ -39,7 +39,7 @@ func (s dbStore) StoreAttr(ctx context.Context, session string, expiresAfter tim
 		arr = append(
 			arr,
 			database_queries.SessionStoreStoreAttrsParams{
-				Session:     session,
+				Session:   session,
 				ExpiresAt: database.ToPgTypeTimestamptz(time.Now().UTC().Add(expiresAfter)),
 				AttrKey:   fields[i],
 				AttrValue: fields[i+1],
@@ -56,7 +56,7 @@ func (s dbStore) GetAttr(ctx context.Context, session, key string) (string, erro
 	res, err := s.db.Queries.SessionStoreGetAttr(
 		ctx,
 		database_queries.SessionStoreGetAttrParams{
-			Session:   session,
+			Session: session,
 			AttrKey: key,
 		},
 	)
@@ -73,7 +73,7 @@ func (s dbStore) RemoveAttr(ctx context.Context, session, key string) error {
 	return s.db.Queries.SessionStoreRemoveAttr(
 		ctx,
 		database_queries.SessionStoreRemoveAttrParams{
-			Session:   session,
+			Session: session,
 			AttrKey: key,
 		},
 	)

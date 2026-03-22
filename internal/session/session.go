@@ -7,8 +7,7 @@ import (
 
 type Session interface {
 	String() string
-	StoreAttr(ctx context.Context, expiresAfter time.Duration, fields ...string) (err error)
+	StoreAttr(ctx context.Context, expiresAfter time.Duration, fields ...string) error
 	GetAttr(ctx context.Context, key string) (string, error)
 	RemoveAttr(ctx context.Context, key string) error
 }
-
