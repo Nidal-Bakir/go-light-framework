@@ -1,5 +1,6 @@
 -- name: OtpChallengeInsert :one
 INSERT INTO otp_challenge (
+    id,
     otp_hash,
     attempts,
     channel,
@@ -7,6 +8,7 @@ INSERT INTO otp_challenge (
     expires_at
 )
 VALUES (
+    sqlc.narg(id),
     @otp_hash,
     @attempts,
     @channel,

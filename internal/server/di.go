@@ -16,8 +16,7 @@ func (s *Server) NewAuthRepository() auth.Repository {
 		s.gatewaysProviderFactory,
 		password_hasher.NewPasswordHasher(password_hasher.BcryptPasswordHash), // changing this value will break the auth system
 		session.NewJwtSessionProvider(appjwt.NewAppJWT(), session.NewRedisStore(s.rdb)),
-		otp.NewRedisStore(s.rdb),
-		otp.NewDBStore(s.db),
+		otp.NewHybridStore(s.rdb,s.db),
 	)
 }
 

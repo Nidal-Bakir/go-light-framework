@@ -14,22 +14,29 @@ type dBStore struct {
 	db *database.Service
 }
 
-func NewDBStore(db *database.Service) StoreProvider {
+func NewDbStore(db *database.Service) StoreProvider {
 	return &dBStore{db}
 }
 
-func (s *dBStore) StoreOtp(ctx context.Context, otpHash string, purpose OtpPurpose, channel OtpChannel, ExpiresAfter time.Duration) (id uuid.UUID, err error) {
-	otpId, err := s.db.Queries.OtpChallengeInsert(
+func (s *dBStore) StoreOtpWithId(ctx context.Context, otpHash string, purpose OtpPurpose, channel OtpChannel, ExpiresAfter time.Duration, id uuid.UUID) error {
+	_, err := s.db.Queries.OtpChallengeInsert(
 		ctx,
 		database_queries.OtpChallengeInsertParams{
+			ID:        database.ToPgTypeUUID(id),
 			OtpHash:   otpHash,
 			Channel:   channel.String(),
 			Purpose:   purpose.String(),
-			Attempts:  database.ToPgTypeInt4(1),
+			Attempts:  database.ToPgTypeInt4(0),
 			ExpiresAt: database.ToPgTypeTimestamptz(time.Now().UTC().Add(ExpiresAfter)),
 		},
 	)
-	return otpId, err
+	return err
+}
+
+func (s *dBStore) StoreOtp(ctx context.Context, otpHash string, purpose OtpPurpose, channel OtpChannel, ExpiresAfter time.Duration) (id uuid.UUID, err error) {
+	id = uuid.New()
+	err = s.StoreOtpWithId(ctx, otpHash, purpose, channel, ExpiresAfter, id)
+	return id, err
 }
 
 func (s *dBStore) GetOtp(ctx context.Context, id uuid.UUID) (*OtpStoreModel, error) {
@@ -74,7 +81,7 @@ func (s *dBStore) IncrementAttemptCounter(ctx context.Context, id uuid.UUID, lim
 	)
 	if err != nil {
 		if database.IsErrPgxNoRows(err) {
-			return limit, true, nil
+			return -1, true, nil
 		}
 		return -1, true, err
 	}

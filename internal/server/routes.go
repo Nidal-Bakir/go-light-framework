@@ -95,6 +95,7 @@ func v1Router(ctx context.Context, s *Server, authRepo auth.Repository, settings
 	mux := http.NewServeMux()
 
 	registerAuthHandler(ctx, mux, s, authRepo)
+	registerMfaHandler(ctx, mux, s, authRepo)
 	registerInstallationHandler(ctx, mux, authRepo)
 	registerSettingsHandler(ctx, mux, settingsRepo, authRepo)
 
@@ -112,6 +113,11 @@ func v1Router(ctx context.Context, s *Server, authRepo auth.Repository, settings
 // handel: /auth/
 func registerAuthHandler(ctx context.Context, mux *http.ServeMux, s *Server, authRepo auth.Repository) {
 	mux.Handle("/auth/", http.StripPrefix("/auth", authRouter(ctx, s, authRepo)))
+}
+
+// handel: /mfa/
+func registerMfaHandler(ctx context.Context, mux *http.ServeMux, s *Server, authRepo auth.Repository) {
+	mux.Handle("/mfa/", http.StripPrefix("/mfa", mfaRouter(ctx, s, authRepo)))
 }
 
 // handel: /installation/

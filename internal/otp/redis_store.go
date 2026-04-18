@@ -20,9 +20,8 @@ func NewRedisStore(redis *redis.Client) StoreProvider {
 	return &redisStore{redis}
 }
 
-func (s *redisStore) StoreOtp(ctx context.Context, otpHash string, purpose OtpPurpose, channel OtpChannel, ExpiresAfter time.Duration) (id uuid.UUID, err error) {
-	id = uuid.New()
-	err = s.redis.HSetEXWithArgs(
+func (s *redisStore) StoreOtpWithId(ctx context.Context, otpHash string, purpose OtpPurpose, channel OtpChannel, ExpiresAfter time.Duration, id uuid.UUID) error {
+	err := s.redis.HSetEXWithArgs(
 		ctx,
 		s.generateKey(id),
 		&redis.HSetEXOptions{
@@ -36,10 +35,16 @@ func (s *redisStore) StoreOtp(ctx context.Context, otpHash string, purpose OtpPu
 			Purpose:   purpose,
 			CreatedAt: time.Now(),
 			UpdatedAt: time.Now(),
-			Attempts:  1,
+			Attempts:  0,
 			ExpiresAt: time.Now().Add(ExpiresAfter),
 		}.toKeyValueSlice()...,
 	).Err()
+	return err
+}
+
+func (s *redisStore) StoreOtp(ctx context.Context, otpHash string, purpose OtpPurpose, channel OtpChannel, ExpiresAfter time.Duration) (id uuid.UUID, err error) {
+	id = uuid.New()
+	err = s.StoreOtpWithId(ctx, otpHash, purpose, channel, ExpiresAfter, id)
 	return id, err
 }
 
@@ -97,7 +102,7 @@ func (s *redisStore) IncrementAttemptCounter(ctx context.Context, id uuid.UUID, 
 	case "ERROR":
 		errorStr := vals[1].(string)
 		if errorStr == "FIELD_NOT_FOUND" {
-			return 0, true, nil
+			return -1, true, nil
 		}
 
 	case "OK":
@@ -106,7 +111,7 @@ func (s *redisStore) IncrementAttemptCounter(ctx context.Context, id uuid.UUID, 
 		return attempts, limitReached, nil
 	}
 
-	return 0, true, fmt.Errorf("luo status erorr")
+	return -1, true, fmt.Errorf("luo status erorr")
 }
 
 func (s *redisStore) generateKey(id uuid.UUID) string {

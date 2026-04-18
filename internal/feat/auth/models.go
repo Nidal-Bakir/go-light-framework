@@ -11,6 +11,7 @@ import (
 	"github.com/Nidal-Bakir/go-todo-backend/internal/database/database_queries"
 	"github.com/Nidal-Bakir/go-todo-backend/internal/feat/auth/oauth/oidc"
 	oauth "github.com/Nidal-Bakir/go-todo-backend/internal/feat/auth/oauth/utils"
+	"github.com/Nidal-Bakir/go-todo-backend/internal/session"
 	"github.com/Nidal-Bakir/go-todo-backend/internal/utils"
 	"github.com/Nidal-Bakir/go-todo-backend/internal/utils/email"
 	"github.com/Nidal-Bakir/go-todo-backend/internal/utils/phonenumber"
@@ -361,31 +362,31 @@ func NewUserFromDatabaseUser(u database_queries.User) User {
 }
 
 type UserAndSession struct {
-	UserID           int32              `json:"user_id"`
-	UserUsername     string             `json:"user_username"`
-	UserProfileImage pgtype.Text        `json:"user_profile_image"`
-	UserFirstName    string             `json:"user_first_name"`
-	UserMiddleName   pgtype.Text        `json:"user_middle_name"`
-	UserLastName     pgtype.Text        `json:"user_last_name"`
-	UserCreatedAt    pgtype.Timestamptz `json:"user_created_at"`
-	UserUpdatedAt    pgtype.Timestamptz `json:"user_updated_at"`
-	UserBlockedAt    pgtype.Timestamptz `json:"user_blocked_at"`
-	UserBlockedUntil pgtype.Timestamptz `json:"user_blocked_until"`
-	UserDeletedAt    pgtype.Timestamptz `json:"user_deleted_at"`
-	UserRoleName     pgtype.Text        `json:"user_role_name"`
+	UserID           int32
+	UserUsername     string
+	UserProfileImage pgtype.Text
+	UserFirstName    string
+	UserMiddleName   pgtype.Text
+	UserLastName     pgtype.Text
+	UserCreatedAt    pgtype.Timestamptz
+	UserUpdatedAt    pgtype.Timestamptz
+	UserBlockedAt    pgtype.Timestamptz
+	UserBlockedUntil pgtype.Timestamptz
+	UserDeletedAt    pgtype.Timestamptz
+	UserRoleName     pgtype.Text
 
-	SessionID               int64              `json:"session_id"`
-	SessionToken            string             `json:"session_token"`
-	SessionCreatedAt        pgtype.Timestamptz `json:"session_created_at"`
-	SessionUpdatedAt        pgtype.Timestamptz `json:"session_updated_at"`
-	SessionExpiresAt        pgtype.Timestamptz `json:"session_expires_at"`
-	SessionDeletedAt        pgtype.Timestamptz `json:"session_deleted_at"`
-	SessionOriginatedFrom   int32              `json:"session_originated_from"`
-	SessionUsedInstallation int32              `json:"session_used_installation"`
-	SessionPurpose          SessionPurpose     `json:"-"`
+	SessionID               int64
+	SessionCreatedAt        pgtype.Timestamptz
+	SessionUpdatedAt        pgtype.Timestamptz
+	SessionExpiresAt        pgtype.Timestamptz
+	SessionDeletedAt        pgtype.Timestamptz
+	SessionOriginatedFrom   int32
+	SessionUsedInstallation int32
+	SessionPurpose          SessionPurpose
+	SessionToken            session.Session
 }
 
-func NewUserAndSessionFromDatabaseUserAndSessionRow(u database_queries.UsersGetUserAndSessionDataBySessionTokenRow) UserAndSession {
+func NewUserAndSessionFromDatabaseUserAndSessionRow(u database_queries.UsersGetUserAndSessionDataBySessionTokenRow, sessionToken session.Session) UserAndSession {
 	return UserAndSession{
 		UserID:           u.UserID,
 		UserUsername:     u.UserUsername,
@@ -398,10 +399,10 @@ func NewUserAndSessionFromDatabaseUserAndSessionRow(u database_queries.UsersGetU
 		UserRoleName:     u.UserRoleName,
 
 		SessionID:               u.SessionID,
-		SessionToken:            u.SessionToken,
 		SessionOriginatedFrom:   u.SessionOriginatedFrom,
 		SessionUsedInstallation: u.SessionUsedInstallation,
 		SessionPurpose:          SessionPurpose(u.SessionPurpose),
+		SessionToken:            sessionToken,
 	}
 }
 

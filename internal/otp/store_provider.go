@@ -22,10 +22,14 @@ type StoreProvider interface {
 	//   purpose: Context for OTP generation (login, password_reset, etc.)
 	//   channel: Delivery method (email, sms, etc.)
 	//   ExpiresAfter: Duration after which OTP becomes invalid
+	//   id: the id that shuld be used to store the recored
 	//
 	// Returns:
 	//   id: Unique identifier for this OTP entry; required for all subsequent operations
 	//   err: Storage error (nil if successful)
+	StoreOtpWithId(ctx context.Context, otpHash string, purpose OtpPurpose, channel OtpChannel, expiresAfter time.Duration, id uuid.UUID) error
+
+	// Same as [StoreOtpWithId] but the id will be auto generated
 	StoreOtp(ctx context.Context, otpHash string, purpose OtpPurpose, channel OtpChannel, expiresAfter time.Duration) (id uuid.UUID, err error)
 
 	// GetOtp retrieves the complete OTP entry for the given ID.
@@ -44,14 +48,15 @@ type StoreProvider interface {
 	RemoveOtp(ctx context.Context, id uuid.UUID) error
 
 	// IncrementAttemptCounter increments the attempt counter for an entry.
-	// The counter starts at 1 when StoreOtp is called and increments up to
+	// The counter starts at 0 when StoreOtp is called and increments up to
 	// the specified limit. Once the limit is reached, no further increments occur.
 	//
-	// Non-existent entries return attempts=0 with limitReached=true (no error).
+	// Non-existent entries return attempts=-1 with limitReached=true (no error).
 	//
 	// Example (limit=2):
-	//   1. StoreOtp() → attempts=1, limitReached=false
-	//   2. IncrementAttemptCounter() → attempts=2, limitReached=false
+	//   1. StoreOtp() → attempts=0, limitReached=false
+	//   2. IncrementAttemptCounter() → attempts=1, limitReached=false
+	//   3. IncrementAttemptCounter() → attempts=2, limitReached=false
 	//   3. IncrementAttemptCounter() → attempts=2, limitReached=true
 	//      (counter stops at limit, no further increments)
 	//

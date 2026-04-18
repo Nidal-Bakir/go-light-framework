@@ -27,8 +27,6 @@ VALUES
     $3::UUID,
     $4::TIMESTAMPTZ
   )
-RETURNING
-  mfa_session
 `
 
 type MfaAddPendingMfaSessionParams struct {
@@ -54,8 +52,6 @@ type MfaAddPendingMfaSessionParams struct {
 //	    $3::UUID,
 //	    $4::TIMESTAMPTZ
 //	  )
-//	RETURNING
-//	  mfa_session
 func (q *Queries) MfaAddPendingMfaSession(ctx context.Context, arg MfaAddPendingMfaSessionParams) error {
 	_, err := q.db.Exec(ctx, mfaAddPendingMfaSession,
 		arg.MfaSession,
@@ -313,7 +309,7 @@ func (q *Queries) MfaDeleteMfaSession(ctx context.Context, id uuid.UUID) error {
 	return err
 }
 
-const mfaGetActiveAllMfaMethodsForUser = `-- name: MfaGetActiveAllMfaMethodsForUser :many
+const mfaGetAllActiveMfaMethodsForUser = `-- name: MfaGetAllActiveMfaMethodsForUser :many
 SELECT
   m.id AS id,
   m.status AS status,
@@ -335,7 +331,7 @@ WHERE
   AND m.status = 'verified'
 `
 
-type MfaGetActiveAllMfaMethodsForUserRow struct {
+type MfaGetAllActiveMfaMethodsForUserRow struct {
 	ID                  int32       `json:"id"`
 	Status              string      `json:"status"`
 	MethodType          string      `json:"method_type"`
@@ -347,7 +343,7 @@ type MfaGetActiveAllMfaMethodsForUserRow struct {
 	MethodHotpAlgorithm pgtype.Text `json:"method_hotp_algorithm"`
 }
 
-// MfaGetActiveAllMfaMethodsForUser
+// MfaGetAllActiveMfaMethodsForUser
 //
 //	SELECT
 //	  m.id AS id,
@@ -368,15 +364,15 @@ type MfaGetActiveAllMfaMethodsForUserRow struct {
 //	WHERE
 //	  m.user_id = $1::INT
 //	  AND m.status = 'verified'
-func (q *Queries) MfaGetActiveAllMfaMethodsForUser(ctx context.Context, userID int32) ([]MfaGetActiveAllMfaMethodsForUserRow, error) {
-	rows, err := q.db.Query(ctx, mfaGetActiveAllMfaMethodsForUser, userID)
+func (q *Queries) MfaGetAllActiveMfaMethodsForUser(ctx context.Context, userID int32) ([]MfaGetAllActiveMfaMethodsForUserRow, error) {
+	rows, err := q.db.Query(ctx, mfaGetAllActiveMfaMethodsForUser, userID)
 	if err != nil {
 		return nil, err
 	}
 	defer rows.Close()
-	items := []MfaGetActiveAllMfaMethodsForUserRow{}
+	items := []MfaGetAllActiveMfaMethodsForUserRow{}
 	for rows.Next() {
-		var i MfaGetActiveAllMfaMethodsForUserRow
+		var i MfaGetAllActiveMfaMethodsForUserRow
 		if err := rows.Scan(
 			&i.ID,
 			&i.Status,
@@ -481,6 +477,89 @@ func (q *Queries) MfaGetAllMfaMethodsForUser(ctx context.Context, userID int32) 
 	return items, nil
 }
 
+const mfaGetEmailMfaForUser = `-- name: MfaGetEmailMfaForUser :one
+SELECT
+  m.id,
+  m.status,
+  m.method_type,
+  m.user_id,
+  m.label,
+  m.created_at AS method_created_at,
+  m.updated_at AS method_updated_at,
+  e.ownership_verification,
+  e.email,
+  e.created_at AS email_created_at,
+  e.updated_at AS email_updated_at
+FROM
+  mfa_method AS m
+  JOIN mfa_method_type_email AS e ON m.id = e.id
+WHERE
+  m.user_id = $1::INT
+  AND e.email = $2::TEXT
+LIMIT
+  1
+`
+
+type MfaGetEmailMfaForUserParams struct {
+	UserID int32  `json:"user_id"`
+	Email  string `json:"email"`
+}
+
+type MfaGetEmailMfaForUserRow struct {
+	ID                    int32              `json:"id"`
+	Status                string             `json:"status"`
+	MethodType            string             `json:"method_type"`
+	UserID                int32              `json:"user_id"`
+	Label                 string             `json:"label"`
+	MethodCreatedAt       pgtype.Timestamptz `json:"method_created_at"`
+	MethodUpdatedAt       pgtype.Timestamptz `json:"method_updated_at"`
+	OwnershipVerification pgtype.UUID        `json:"ownership_verification"`
+	Email                 string             `json:"email"`
+	EmailCreatedAt        pgtype.Timestamptz `json:"email_created_at"`
+	EmailUpdatedAt        pgtype.Timestamptz `json:"email_updated_at"`
+}
+
+// MfaGetEmailMfaForUser
+//
+//	SELECT
+//	  m.id,
+//	  m.status,
+//	  m.method_type,
+//	  m.user_id,
+//	  m.label,
+//	  m.created_at AS method_created_at,
+//	  m.updated_at AS method_updated_at,
+//	  e.ownership_verification,
+//	  e.email,
+//	  e.created_at AS email_created_at,
+//	  e.updated_at AS email_updated_at
+//	FROM
+//	  mfa_method AS m
+//	  JOIN mfa_method_type_email AS e ON m.id = e.id
+//	WHERE
+//	  m.user_id = $1::INT
+//	  AND e.email = $2::TEXT
+//	LIMIT
+//	  1
+func (q *Queries) MfaGetEmailMfaForUser(ctx context.Context, arg MfaGetEmailMfaForUserParams) (MfaGetEmailMfaForUserRow, error) {
+	row := q.db.QueryRow(ctx, mfaGetEmailMfaForUser, arg.UserID, arg.Email)
+	var i MfaGetEmailMfaForUserRow
+	err := row.Scan(
+		&i.ID,
+		&i.Status,
+		&i.MethodType,
+		&i.UserID,
+		&i.Label,
+		&i.MethodCreatedAt,
+		&i.MethodUpdatedAt,
+		&i.OwnershipVerification,
+		&i.Email,
+		&i.EmailCreatedAt,
+		&i.EmailUpdatedAt,
+	)
+	return i, err
+}
+
 const mfaGetMethod = `-- name: MfaGetMethod :one
 SELECT
   m.id AS id,
@@ -554,6 +633,275 @@ func (q *Queries) MfaGetMethod(ctx context.Context, arg MfaGetMethodParams) (Mfa
 		&i.MethodPhonePhone,
 		&i.MethodTotpAlgorithm,
 		&i.MethodHotpAlgorithm,
+	)
+	return i, err
+}
+
+const mfaGetOwnershipVerificationId = `-- name: MfaGetOwnershipVerificationId :one
+SELECT
+  m.method_type,
+  e.ownership_verification AS email_ownership_verification,
+  p.ownership_verification AS phone_ownership_verification
+FROM
+  mfa_method AS m
+  LEFT JOIN mfa_method_type_email AS e ON m.id = e.id
+  LEFT JOIN mfa_method_type_phone AS p ON m.id = p.id
+WHERE
+  m.user_id = $1::INT
+  AND m.id = $2::INT
+  AND m.status = 'pending'
+LIMIT
+  1
+`
+
+type MfaGetOwnershipVerificationIdParams struct {
+	UserID int32 `json:"user_id"`
+	MfaID  int32 `json:"mfa_id"`
+}
+
+type MfaGetOwnershipVerificationIdRow struct {
+	MethodType                 string      `json:"method_type"`
+	EmailOwnershipVerification pgtype.UUID `json:"email_ownership_verification"`
+	PhoneOwnershipVerification pgtype.UUID `json:"phone_ownership_verification"`
+}
+
+// MfaGetOwnershipVerificationId
+//
+//	SELECT
+//	  m.method_type,
+//	  e.ownership_verification AS email_ownership_verification,
+//	  p.ownership_verification AS phone_ownership_verification
+//	FROM
+//	  mfa_method AS m
+//	  LEFT JOIN mfa_method_type_email AS e ON m.id = e.id
+//	  LEFT JOIN mfa_method_type_phone AS p ON m.id = p.id
+//	WHERE
+//	  m.user_id = $1::INT
+//	  AND m.id = $2::INT
+//	  AND m.status = 'pending'
+//	LIMIT
+//	  1
+func (q *Queries) MfaGetOwnershipVerificationId(ctx context.Context, arg MfaGetOwnershipVerificationIdParams) (MfaGetOwnershipVerificationIdRow, error) {
+	row := q.db.QueryRow(ctx, mfaGetOwnershipVerificationId, arg.UserID, arg.MfaID)
+	var i MfaGetOwnershipVerificationIdRow
+	err := row.Scan(&i.MethodType, &i.EmailOwnershipVerification, &i.PhoneOwnershipVerification)
+	return i, err
+}
+
+const mfaGetPendingMfaSession = `-- name: MfaGetPendingMfaSession :one
+SELECT
+  mfa_session, mfa_method, otp_challenge, expires_at, created_at, updated_at
+from
+  pending_mfa_session
+WHERE
+  mfa_session = $1::UUID
+  AND mfa_method = $2::INTEGER
+LIMIT
+  1
+`
+
+type MfaGetPendingMfaSessionParams struct {
+	MfaSession uuid.UUID `json:"mfa_session"`
+	MfaMethod  int32     `json:"mfa_method"`
+}
+
+// MfaGetPendingMfaSession
+//
+//	SELECT
+//	  mfa_session, mfa_method, otp_challenge, expires_at, created_at, updated_at
+//	from
+//	  pending_mfa_session
+//	WHERE
+//	  mfa_session = $1::UUID
+//	  AND mfa_method = $2::INTEGER
+//	LIMIT
+//	  1
+func (q *Queries) MfaGetPendingMfaSession(ctx context.Context, arg MfaGetPendingMfaSessionParams) (PendingMfaSession, error) {
+	row := q.db.QueryRow(ctx, mfaGetPendingMfaSession, arg.MfaSession, arg.MfaMethod)
+	var i PendingMfaSession
+	err := row.Scan(
+		&i.MfaSession,
+		&i.MfaMethod,
+		&i.OtpChallenge,
+		&i.ExpiresAt,
+		&i.CreatedAt,
+		&i.UpdatedAt,
+	)
+	return i, err
+}
+
+const mfaGetPendingMfaSessionWithOtpChallenge = `-- name: MfaGetPendingMfaSessionWithOtpChallenge :one
+SELECT
+  p.mfa_session mfa_session,
+  p.mfa_method mfa_method,
+  p.expires_at pending_mfa_session_expires_at,
+  p.created_at pending_mfa_session_created_at,
+  p.updated_at AS pending_mfa_session_updated_at,
+  o.id AS otp_challenge_id,
+  o.otp_hash AS otp_challenge_otp_hash,
+  o.channel AS otp_challenge_channel,
+  o.attempts AS otp_challenge_attempts,
+  o.purpose AS otp_challenge_purpose,
+  o.created_at AS otp_challenge_created_at,
+  o.updated_at AS otp_challenge_updated_at,
+  o.expires_at AS otp_challenge_expires_at
+from
+  pending_mfa_session AS p
+  LEFT JOIN otp_challenge AS o ON p.otp_challenge = o.id
+WHERE
+  p.mfa_session = $1::UUID
+  AND p.mfa_method = $2::INTEGER
+  AND o.expires_at > NOW()
+LIMIT
+  1
+`
+
+type MfaGetPendingMfaSessionWithOtpChallengeParams struct {
+	MfaSession uuid.UUID `json:"mfa_session"`
+	MfaMethod  int32     `json:"mfa_method"`
+}
+
+type MfaGetPendingMfaSessionWithOtpChallengeRow struct {
+	MfaSession                 uuid.UUID          `json:"mfa_session"`
+	MfaMethod                  int32              `json:"mfa_method"`
+	PendingMfaSessionExpiresAt pgtype.Timestamptz `json:"pending_mfa_session_expires_at"`
+	PendingMfaSessionCreatedAt pgtype.Timestamptz `json:"pending_mfa_session_created_at"`
+	PendingMfaSessionUpdatedAt pgtype.Timestamptz `json:"pending_mfa_session_updated_at"`
+	OtpChallengeID             pgtype.UUID        `json:"otp_challenge_id"`
+	OtpChallengeOtpHash        pgtype.Text        `json:"otp_challenge_otp_hash"`
+	OtpChallengeChannel        pgtype.Text        `json:"otp_challenge_channel"`
+	OtpChallengeAttempts       pgtype.Int4        `json:"otp_challenge_attempts"`
+	OtpChallengePurpose        pgtype.Text        `json:"otp_challenge_purpose"`
+	OtpChallengeCreatedAt      pgtype.Timestamptz `json:"otp_challenge_created_at"`
+	OtpChallengeUpdatedAt      pgtype.Timestamptz `json:"otp_challenge_updated_at"`
+	OtpChallengeExpiresAt      pgtype.Timestamptz `json:"otp_challenge_expires_at"`
+}
+
+// MfaGetPendingMfaSessionWithOtpChallenge
+//
+//	SELECT
+//	  p.mfa_session mfa_session,
+//	  p.mfa_method mfa_method,
+//	  p.expires_at pending_mfa_session_expires_at,
+//	  p.created_at pending_mfa_session_created_at,
+//	  p.updated_at AS pending_mfa_session_updated_at,
+//	  o.id AS otp_challenge_id,
+//	  o.otp_hash AS otp_challenge_otp_hash,
+//	  o.channel AS otp_challenge_channel,
+//	  o.attempts AS otp_challenge_attempts,
+//	  o.purpose AS otp_challenge_purpose,
+//	  o.created_at AS otp_challenge_created_at,
+//	  o.updated_at AS otp_challenge_updated_at,
+//	  o.expires_at AS otp_challenge_expires_at
+//	from
+//	  pending_mfa_session AS p
+//	  LEFT JOIN otp_challenge AS o ON p.otp_challenge = o.id
+//	WHERE
+//	  p.mfa_session = $1::UUID
+//	  AND p.mfa_method = $2::INTEGER
+//	  AND o.expires_at > NOW()
+//	LIMIT
+//	  1
+func (q *Queries) MfaGetPendingMfaSessionWithOtpChallenge(ctx context.Context, arg MfaGetPendingMfaSessionWithOtpChallengeParams) (MfaGetPendingMfaSessionWithOtpChallengeRow, error) {
+	row := q.db.QueryRow(ctx, mfaGetPendingMfaSessionWithOtpChallenge, arg.MfaSession, arg.MfaMethod)
+	var i MfaGetPendingMfaSessionWithOtpChallengeRow
+	err := row.Scan(
+		&i.MfaSession,
+		&i.MfaMethod,
+		&i.PendingMfaSessionExpiresAt,
+		&i.PendingMfaSessionCreatedAt,
+		&i.PendingMfaSessionUpdatedAt,
+		&i.OtpChallengeID,
+		&i.OtpChallengeOtpHash,
+		&i.OtpChallengeChannel,
+		&i.OtpChallengeAttempts,
+		&i.OtpChallengePurpose,
+		&i.OtpChallengeCreatedAt,
+		&i.OtpChallengeUpdatedAt,
+		&i.OtpChallengeExpiresAt,
+	)
+	return i, err
+}
+
+const mfaGetPhoneMfaForUser = `-- name: MfaGetPhoneMfaForUser :one
+SELECT
+  m.id,
+  m.status,
+  m.method_type,
+  m.user_id,
+  m.label,
+  m.created_at AS method_created_at,
+  m.updated_at AS method_updated_at,
+  p.ownership_verification,
+  p.phone,
+  p.created_at AS email_created_at,
+  p.updated_at AS email_updated_at
+FROM
+  mfa_method AS m
+  JOIN mfa_method_type_phone AS p ON m.id = p.id
+WHERE
+  m.user_id = $1::INT
+  AND p.phone = $2::TEXT
+LIMIT
+  1
+`
+
+type MfaGetPhoneMfaForUserParams struct {
+	UserID int32  `json:"user_id"`
+	Phone  string `json:"phone"`
+}
+
+type MfaGetPhoneMfaForUserRow struct {
+	ID                    int32              `json:"id"`
+	Status                string             `json:"status"`
+	MethodType            string             `json:"method_type"`
+	UserID                int32              `json:"user_id"`
+	Label                 string             `json:"label"`
+	MethodCreatedAt       pgtype.Timestamptz `json:"method_created_at"`
+	MethodUpdatedAt       pgtype.Timestamptz `json:"method_updated_at"`
+	OwnershipVerification pgtype.UUID        `json:"ownership_verification"`
+	Phone                 string             `json:"phone"`
+	EmailCreatedAt        pgtype.Timestamptz `json:"email_created_at"`
+	EmailUpdatedAt        pgtype.Timestamptz `json:"email_updated_at"`
+}
+
+// MfaGetPhoneMfaForUser
+//
+//	SELECT
+//	  m.id,
+//	  m.status,
+//	  m.method_type,
+//	  m.user_id,
+//	  m.label,
+//	  m.created_at AS method_created_at,
+//	  m.updated_at AS method_updated_at,
+//	  p.ownership_verification,
+//	  p.phone,
+//	  p.created_at AS email_created_at,
+//	  p.updated_at AS email_updated_at
+//	FROM
+//	  mfa_method AS m
+//	  JOIN mfa_method_type_phone AS p ON m.id = p.id
+//	WHERE
+//	  m.user_id = $1::INT
+//	  AND p.phone = $2::TEXT
+//	LIMIT
+//	  1
+func (q *Queries) MfaGetPhoneMfaForUser(ctx context.Context, arg MfaGetPhoneMfaForUserParams) (MfaGetPhoneMfaForUserRow, error) {
+	row := q.db.QueryRow(ctx, mfaGetPhoneMfaForUser, arg.UserID, arg.Phone)
+	var i MfaGetPhoneMfaForUserRow
+	err := row.Scan(
+		&i.ID,
+		&i.Status,
+		&i.MethodType,
+		&i.UserID,
+		&i.Label,
+		&i.MethodCreatedAt,
+		&i.MethodUpdatedAt,
+		&i.OwnershipVerification,
+		&i.Phone,
+		&i.EmailCreatedAt,
+		&i.EmailUpdatedAt,
 	)
 	return i, err
 }
@@ -687,6 +1035,54 @@ func (q *Queries) MfaRememberDevice(ctx context.Context, arg MfaRememberDevicePa
 	return err
 }
 
+const mfaRemoveExpiredMfaSession = `-- name: MfaRemoveExpiredMfaSession :exec
+DELETE FROM mfa_session
+WHERE
+  expires_at < NOW()
+`
+
+// MfaRemoveExpiredMfaSession
+//
+//	DELETE FROM mfa_session
+//	WHERE
+//	  expires_at < NOW()
+func (q *Queries) MfaRemoveExpiredMfaSession(ctx context.Context) error {
+	_, err := q.db.Exec(ctx, mfaRemoveExpiredMfaSession)
+	return err
+}
+
+const mfaRemoveExpiredPendingMfaSession = `-- name: MfaRemoveExpiredPendingMfaSession :exec
+DELETE FROM pending_mfa_session
+WHERE
+  expires_at < NOW()
+`
+
+// MfaRemoveExpiredPendingMfaSession
+//
+//	DELETE FROM pending_mfa_session
+//	WHERE
+//	  expires_at < NOW()
+func (q *Queries) MfaRemoveExpiredPendingMfaSession(ctx context.Context) error {
+	_, err := q.db.Exec(ctx, mfaRemoveExpiredPendingMfaSession)
+	return err
+}
+
+const mfaRemoveExpiredRememberedDevices = `-- name: MfaRemoveExpiredRememberedDevices :exec
+DELETE FROM mfa_remembered_devices
+WHERE
+  expires_at < NOW()
+`
+
+// MfaRemoveExpiredRememberedDevices
+//
+//	DELETE FROM mfa_remembered_devices
+//	WHERE
+//	  expires_at < NOW()
+func (q *Queries) MfaRemoveExpiredRememberedDevices(ctx context.Context) error {
+	_, err := q.db.Exec(ctx, mfaRemoveExpiredRememberedDevices)
+	return err
+}
+
 const mfaRemoveRememberDevice = `-- name: MfaRemoveRememberDevice :exec
 DELETE FROM mfa_remembered_devices
 WHERE
@@ -700,6 +1096,34 @@ WHERE
 //	  id = $1::UUID
 func (q *Queries) MfaRemoveRememberDevice(ctx context.Context, id uuid.UUID) error {
 	_, err := q.db.Exec(ctx, mfaRemoveRememberDevice, id)
+	return err
+}
+
+const mfaSetOtpChallengeForPendingMfa = `-- name: MfaSetOtpChallengeForPendingMfa :exec
+UPDATE pending_mfa_session
+SET
+  otp_challenge = $1::UUID
+WHERE
+  mfa_session = $2::UUID
+  AND mfa_method = $3::INTEGER
+`
+
+type MfaSetOtpChallengeForPendingMfaParams struct {
+	OtpChallenge uuid.UUID `json:"otp_challenge"`
+	MfaSession   uuid.UUID `json:"mfa_session"`
+	MfaMethod    int32     `json:"mfa_method"`
+}
+
+// MfaSetOtpChallengeForPendingMfa
+//
+//	UPDATE pending_mfa_session
+//	SET
+//	  otp_challenge = $1::UUID
+//	WHERE
+//	  mfa_session = $2::UUID
+//	  AND mfa_method = $3::INTEGER
+func (q *Queries) MfaSetOtpChallengeForPendingMfa(ctx context.Context, arg MfaSetOtpChallengeForPendingMfaParams) error {
+	_, err := q.db.Exec(ctx, mfaSetOtpChallengeForPendingMfa, arg.OtpChallenge, arg.MfaSession, arg.MfaMethod)
 	return err
 }
 
@@ -768,6 +1192,56 @@ type MfaUpdateLastUsedForRememberDeviceParams struct {
 //	  AND expires_at > NOW()
 func (q *Queries) MfaUpdateLastUsedForRememberDevice(ctx context.Context, arg MfaUpdateLastUsedForRememberDeviceParams) error {
 	_, err := q.db.Exec(ctx, mfaUpdateLastUsedForRememberDevice, arg.LastUsed, arg.UserID, arg.DeviceFingerprint)
+	return err
+}
+
+const mfaUpdateOwnershipVerificationForMfaMethodTypeEmail = `-- name: MfaUpdateOwnershipVerificationForMfaMethodTypeEmail :exec
+UPDATE mfa_method_type_email
+SET
+  ownership_verification = $1::UUID
+WHERE
+  id = $2::INT
+`
+
+type MfaUpdateOwnershipVerificationForMfaMethodTypeEmailParams struct {
+	OwnershipVerification uuid.UUID `json:"ownership_verification"`
+	ID                    int32     `json:"id"`
+}
+
+// MfaUpdateOwnershipVerificationForMfaMethodTypeEmail
+//
+//	UPDATE mfa_method_type_email
+//	SET
+//	  ownership_verification = $1::UUID
+//	WHERE
+//	  id = $2::INT
+func (q *Queries) MfaUpdateOwnershipVerificationForMfaMethodTypeEmail(ctx context.Context, arg MfaUpdateOwnershipVerificationForMfaMethodTypeEmailParams) error {
+	_, err := q.db.Exec(ctx, mfaUpdateOwnershipVerificationForMfaMethodTypeEmail, arg.OwnershipVerification, arg.ID)
+	return err
+}
+
+const mfaUpdateOwnershipVerificationForMfaMethodTypePhone = `-- name: MfaUpdateOwnershipVerificationForMfaMethodTypePhone :exec
+UPDATE mfa_method_type_phone
+SET
+  ownership_verification = $1::UUID
+WHERE
+  id = $2::INT
+`
+
+type MfaUpdateOwnershipVerificationForMfaMethodTypePhoneParams struct {
+	OwnershipVerification uuid.UUID `json:"ownership_verification"`
+	ID                    int32     `json:"id"`
+}
+
+// MfaUpdateOwnershipVerificationForMfaMethodTypePhone
+//
+//	UPDATE mfa_method_type_phone
+//	SET
+//	  ownership_verification = $1::UUID
+//	WHERE
+//	  id = $2::INT
+func (q *Queries) MfaUpdateOwnershipVerificationForMfaMethodTypePhone(ctx context.Context, arg MfaUpdateOwnershipVerificationForMfaMethodTypePhoneParams) error {
+	_, err := q.db.Exec(ctx, mfaUpdateOwnershipVerificationForMfaMethodTypePhone, arg.OwnershipVerification, arg.ID)
 	return err
 }
 

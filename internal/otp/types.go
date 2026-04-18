@@ -16,11 +16,12 @@ const (
 	EmailChannel OtpChannel = "email"
 	SMSChannel   OtpChannel = "sms"
 
-	AccountVerification OtpPurpose = "account_verification"
-	ResetPassword       OtpPurpose = "reset_password"
-	MfaVerification     OtpPurpose = "mfa_verification"
-	MfaEmailOtp         OtpPurpose = "mfa_email_otp"
-	MfaPhoneOtp         OtpPurpose = "mfa_phone_otp"
+	AccountVerification  OtpPurpose = "account_verification"
+	ResetPassword        OtpPurpose = "reset_password"
+	MfaEmailVerification OtpPurpose = "mfa_email_verification"
+	MfaPhoneVerification OtpPurpose = "mfa_phone_verification"
+	MfaEmailOtp          OtpPurpose = "mfa_email_otp"
+	MfaPhoneOtp          OtpPurpose = "mfa_phone_otp"
 )
 
 func (c OtpChannel) String() string {

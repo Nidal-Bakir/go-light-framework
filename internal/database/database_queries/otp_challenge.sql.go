@@ -105,6 +105,7 @@ func (q *Queries) OtpChallengeIncAttempt(ctx context.Context, arg OtpChallengeIn
 
 const otpChallengeInsert = `-- name: OtpChallengeInsert :one
 INSERT INTO otp_challenge (
+    id,
     otp_hash,
     attempts,
     channel,
@@ -116,12 +117,14 @@ VALUES (
     $2,
     $3,
     $4,
-    $5
+    $5,
+    $6
 )
 RETURNING id
 `
 
 type OtpChallengeInsertParams struct {
+	ID        pgtype.UUID        `json:"id"`
 	OtpHash   string             `json:"otp_hash"`
 	Attempts  pgtype.Int4        `json:"attempts"`
 	Channel   string             `json:"channel"`
@@ -132,6 +135,7 @@ type OtpChallengeInsertParams struct {
 // OtpChallengeInsert
 //
 //	INSERT INTO otp_challenge (
+//	    id,
 //	    otp_hash,
 //	    attempts,
 //	    channel,
@@ -143,11 +147,13 @@ type OtpChallengeInsertParams struct {
 //	    $2,
 //	    $3,
 //	    $4,
-//	    $5
+//	    $5,
+//	    $6
 //	)
 //	RETURNING id
 func (q *Queries) OtpChallengeInsert(ctx context.Context, arg OtpChallengeInsertParams) (uuid.UUID, error) {
 	row := q.db.QueryRow(ctx, otpChallengeInsert,
+		arg.ID,
 		arg.OtpHash,
 		arg.Attempts,
 		arg.Channel,
