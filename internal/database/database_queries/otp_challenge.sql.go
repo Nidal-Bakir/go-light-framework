@@ -78,7 +78,7 @@ UPDATE otp_challenge
 SET attempts = attempts + $1
 WHERE id = $2 
  AND attempts < $3
- AND expires_at < NOW()
+ AND expires_at > NOW()
 RETURNING attempts
 `
 
@@ -94,7 +94,7 @@ type OtpChallengeIncAttemptParams struct {
 //	SET attempts = attempts + $1
 //	WHERE id = $2
 //	 AND attempts < $3
-//	 AND expires_at < NOW()
+//	 AND expires_at > NOW()
 //	RETURNING attempts
 func (q *Queries) OtpChallengeIncAttempt(ctx context.Context, arg OtpChallengeIncAttemptParams) (pgtype.Int4, error) {
 	row := q.db.QueryRow(ctx, otpChallengeIncAttempt, arg.Inc, arg.ID, arg.Attemptslimit)

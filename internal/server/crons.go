@@ -27,6 +27,7 @@ func (s *Server) _otpChallengeDeleteExpiredRows(ctx context.Context) {
 		gocron.WithContext(ctx),
 		gocron.WithSingletonMode(gocron.LimitModeReschedule),
 		gocron.WithName("Otp Challenge Delete Expired Rows"),
+		gocron.JobOption(gocron.WithStartImmediately()),
 	)
 }
 
@@ -42,6 +43,7 @@ func (s *Server) _sessionDeleteExpiredRows(ctx context.Context) {
 		gocron.WithContext(ctx),
 		gocron.WithSingletonMode(gocron.LimitModeReschedule),
 		gocron.WithName("Sessions Delete Expired Rows"),
+		gocron.JobOption(gocron.WithStartImmediately()),
 	)
 }
 
@@ -57,6 +59,7 @@ func (s *Server) _mfaSessionDeleteExpiredRows(ctx context.Context) {
 		gocron.WithContext(ctx),
 		gocron.WithSingletonMode(gocron.LimitModeReschedule),
 		gocron.WithName("MFA Sessions Delete Expired Rows"),
+		gocron.JobOption(gocron.WithStartImmediately()),
 	)
 }
 func (s *Server) _mfaPendingSessionDeleteExpiredRows(ctx context.Context) {
@@ -71,6 +74,7 @@ func (s *Server) _mfaPendingSessionDeleteExpiredRows(ctx context.Context) {
 		gocron.WithContext(ctx),
 		gocron.WithSingletonMode(gocron.LimitModeReschedule),
 		gocron.WithName("MFA Pending Sessions Delete Expired Rows"),
+		gocron.JobOption(gocron.WithStartImmediately()),
 	)
 }
 
@@ -86,5 +90,6 @@ func (s *Server) _mfaRememberedDevicesDeleteExpiredRows(ctx context.Context) {
 		gocron.WithContext(ctx),
 		gocron.WithSingletonMode(gocron.LimitModeReschedule),
 		gocron.WithName("MFA Remembered Devices Delete Expired Rows"),
+		gocron.JobOption(gocron.WithStartImmediately()),
 	)
 }

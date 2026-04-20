@@ -1,8 +1,10 @@
 package otp
 
 import (
+	"fmt"
 	"time"
 
+	"github.com/Nidal-Bakir/go-todo-backend/internal/apperr"
 	"github.com/Nidal-Bakir/go-todo-backend/internal/l10n"
 	"github.com/Nidal-Bakir/go-todo-backend/internal/utils/email"
 	"github.com/Nidal-Bakir/go-todo-backend/internal/utils/phonenumber"
@@ -30,6 +32,79 @@ func (c OtpChannel) String() string {
 
 func (o OtpPurpose) String() string {
 	return string(o)
+}
+
+func (l *OtpPurpose) FromString(str string) (*OtpPurpose, error) {
+	switch {
+	case AccountVerification.String() == str:
+		*l = AccountVerification
+	case ResetPassword.String() == str:
+		*l = ResetPassword
+	case MfaEmailVerification.String() == str:
+		*l = MfaEmailVerification
+	case MfaPhoneVerification.String() == str:
+		*l = MfaPhoneVerification
+	case MfaEmailOtp.String() == str:
+		*l = MfaEmailOtp
+	case MfaPhoneOtp.String() == str:
+		*l = MfaPhoneOtp
+	default:
+		l = nil
+		return l, apperr.ErrUnsupportedLoginIdentityType
+	}
+	return l, nil
+}
+
+func (l *OtpPurpose) Fold(actions OtpPurposeFoldActions) {
+	panicFn := func() {
+		panic(fmt.Sprintf("Not supported otp purpose type %s", l.String()))
+	}
+	if l == nil {
+		panicFn()
+		return
+	}
+	l.FoldOr(actions, panicFn)
+}
+
+func (l *OtpPurpose) FoldOr(actions OtpPurposeFoldActions, orElse func()) {
+	if l == nil {
+		orElse()
+		return
+	}
+
+	actionOrElse := func(fn func()) func() {
+		if fn == nil {
+			return orElse
+		}
+		return fn
+	}
+
+	switch *l {
+	case AccountVerification:
+		actionOrElse(actions.OnAccountVerification)()
+	case ResetPassword:
+		actionOrElse(actions.OnResetPassword)()
+	case MfaEmailVerification:
+		actionOrElse(actions.OnMfaEmailVerification)()
+	case MfaPhoneVerification:
+		actionOrElse(actions.OnMfaPhoneVerification)()
+	case MfaEmailOtp:
+		actionOrElse(actions.OnMfaEmailOtp)()
+	case MfaPhoneOtp:
+		actionOrElse(actions.OnMfaPhoneOtp)()
+
+	default:
+		orElse()
+	}
+}
+
+type OtpPurposeFoldActions struct {
+	OnAccountVerification  func()
+	OnResetPassword        func()
+	OnMfaEmailVerification func()
+	OnMfaPhoneVerification func()
+	OnMfaEmailOtp          func()
+	OnMfaPhoneOtp          func()
 }
 
 type OtpStoreModel struct {

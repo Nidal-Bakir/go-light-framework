@@ -53,6 +53,7 @@ type DataSource interface {
 	CreatePasswordUser(ctx context.Context, userArgs CreatePasswordUserArgs) (user database_queries.User, err error)
 	CreateNewSessionAndAttachUserToInstallation(ctx context.Context, loginIdentityId, installationId int32, token string, ipAddress netip.Addr, expiresAt time.Time) error
 	CreateInstallation(ctx context.Context, data CreateInstallationData, installationToken string) error
+	CreateNewSession(ctx context.Context, loginIdentityId, installationId int32, token string, ipAddress netip.Addr, expiresAt time.Time, sessionPurpose SessionPurpose) error
 
 	LoginOrCreateUserWithOidc(ctx context.Context, data LoginOrCreateUserWithOidcData, tokenGenerator func(userId int32) (string, time.Time, error)) (database_queries.User, error)
 
@@ -269,6 +270,29 @@ func (ds dataSourceImpl) GetPasswordLoginIdentity(ctx context.Context, identityV
 	return loginIdentity, err
 }
 
+func (ds dataSourceImpl) CreateNewSession(
+	ctx context.Context,
+	loginIdentityId,
+	installationId int32,
+	token string,
+	ipAddress netip.Addr,
+	expiresAt time.Time,
+	sessionPurpose SessionPurpose,
+) error {
+	_, err := ds.db.Queries.SessionCreateNewSession(
+		ctx,
+		database_queries.SessionCreateNewSessionParams{
+			Token:            token,
+			OriginatedFrom:   loginIdentityId,
+			UsedInstallation: installationId,
+			ExpiresAt:        pgtype.Timestamptz{Time: expiresAt, Valid: true},
+			IpAddress:        ipAddress,
+			Purpose:          sessionPurpose.String(),
+		},
+	)
+	return err
+}
+
 func (ds dataSourceImpl) CreateNewSessionAndAttachUserToInstallation(
 	ctx context.Context,
 	loginIdentityId,
@@ -302,7 +326,7 @@ func (ds dataSourceImpl) createNewSessionAndAttachUserToInstallation(
 	ipAddress netip.Addr,
 	expiresAt time.Time,
 	queries *database_queries.Queries,
-) (err error) {
+) error {
 	sessionId, err := queries.SessionCreateNewSession(
 		ctx,
 		database_queries.SessionCreateNewSessionParams{
@@ -330,8 +354,7 @@ func (ds dataSourceImpl) createNewSessionAndAttachUserToInstallation(
 	}
 
 	if affectedRows == 0 {
-		err = apperr.ErrInstallationTokenInUse
-		return err
+		return apperr.ErrInstallationTokenInUse
 	}
 
 	err = queries.LoginIdentityUpdateLastUsedAtToNow(ctx, loginIdentityId)
@@ -507,7 +530,7 @@ func (ds dataSourceImpl) ExpTokenAndUnlinkFromInstallation(ctx context.Context, 
 		ctx,
 		ds.db,
 		func(queries *database_queries.Queries) error {
-			err = queries.SessionDeleteSession(ctx, tokenId)
+			err = queries.SessionSoftDeleteSession(ctx, tokenId)
 			if err != nil {
 				return err
 			}
@@ -1048,6 +1071,6 @@ func (ds dataSourceImpl) GetOwnershipVerificationIdForMfa(ctx context.Context, u
 			return uuid.Nil, apperr.ErrNoResult
 		}
 	}
-	
+
 	return uuid.Nil, apperr.ErrNoResult
 }

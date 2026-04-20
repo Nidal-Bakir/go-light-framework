@@ -513,9 +513,9 @@ func vareifyAccount(authRepo auth.Repository) http.HandlerFunc {
 		}
 
 		response := struct {
-			User publicUser `json:"user"`
+			User *publicUser `json:"user"`
 		}{
-			User: NewPublicUserFromAuthUser(user),
+			User: NewPublicUserFromAuthUser(&user),
 		}
 
 		writeResponse(ctx, w, r, http.StatusCreated, response)
@@ -578,8 +578,7 @@ func passwordLogin(authRepo auth.Repository) http.HandlerFunc {
 		installation := auth.MustInstallationFromContext(ctx)
 		requestIpAddres := tracker.MustReqIPFromContext(ctx)
 
-		// TODO: implement this!! shouldUseMfa (_)
-		user, _, token, err := authRepo.PasswordLogin(
+		user, shouldUseMfa, token, err := authRepo.PasswordLogin(
 			ctx,
 			auth.PasswordLoginAccessKey{Phone: loginParam.PhoneNumber, Email: loginParam.Email, LoginIdentityType: loginParam.LoginIdentityType},
 			loginParam.Password,
@@ -601,11 +600,13 @@ func passwordLogin(authRepo auth.Repository) http.HandlerFunc {
 		}
 
 		response := struct {
-			User  publicUser `json:"user"`
-			Token string     `json:"token"`
+			User  *publicUser `json:"user,omitzero"`
+			Token string      `json:"token"`
+			Mfa   bool        `json:"mfa,omitzero"`
 		}{
-			User:  NewPublicUserFromAuthUser(*user),
+			User:  NewPublicUserFromAuthUser(user),
 			Token: token,
+			Mfa:   shouldUseMfa,
 		}
 		writeResponse(ctx, w, r, http.StatusCreated, response)
 	}
@@ -789,8 +790,11 @@ type publicUser struct {
 	LastName     pgtype.Text `json:"last_name"`
 }
 
-func NewPublicUserFromAuthUser(u auth.User) publicUser {
-	return publicUser{
+func NewPublicUserFromAuthUser(u *auth.User) *publicUser {
+	if u == nil {
+		return nil
+	}
+	return &publicUser{
 		ID:           u.ID,
 		Username:     u.Username,
 		ProfileImage: u.ProfileImage,
@@ -1074,10 +1078,10 @@ func mobileOidcLogin(authRepo auth.Repository) http.HandlerFunc {
 		}
 
 		response := struct {
-			User  publicUser `json:"user"`
-			Token string     `json:"token"`
+			User  *publicUser `json:"user"`
+			Token string      `json:"token"`
 		}{
-			User:  NewPublicUserFromAuthUser(user),
+			User:  NewPublicUserFromAuthUser(&user),
 			Token: token,
 		}
 		writeResponse(ctx, w, r, http.StatusCreated, response)

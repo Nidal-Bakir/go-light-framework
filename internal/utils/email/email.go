@@ -27,5 +27,5 @@ func MustParse(email string) *Email {
 }
 
 func (e *Email) String() string {
-	return e.String()
+	return e.email.Address
 }

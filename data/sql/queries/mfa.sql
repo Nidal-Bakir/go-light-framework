@@ -8,7 +8,7 @@ WITH
         'pending',
         'email',
         @user_id::INT,
-        sqlc.narg (label)::TEXT
+        @label::TEXT
       )
     RETURNING
       id
@@ -84,7 +84,7 @@ WITH
         'pending',
         'phone',
         @user_id::INT,
-        sqlc.narg (label)::TEXT
+        @label::TEXT
       )
     RETURNING
       id

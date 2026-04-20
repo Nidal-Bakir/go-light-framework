@@ -115,6 +115,7 @@ type ActiveSession struct {
 	ExpiresAt        pgtype.Timestamptz `json:"expires_at"`
 	CreatedAt        pgtype.Timestamptz `json:"created_at"`
 	UpdatedAt        pgtype.Timestamptz `json:"updated_at"`
+	DeletedAt        pgtype.Timestamptz `json:"deleted_at"`
 	Purpose          string             `json:"purpose"`
 	OriginatedFrom   int32              `json:"originated_from"`
 	UsedInstallation int32              `json:"used_installation"`
@@ -416,6 +417,7 @@ type Session struct {
 	ExpiresAt        pgtype.Timestamptz `json:"expires_at"`
 	CreatedAt        pgtype.Timestamptz `json:"created_at"`
 	UpdatedAt        pgtype.Timestamptz `json:"updated_at"`
+	DeletedAt        pgtype.Timestamptz `json:"deleted_at"`
 	Purpose          string             `json:"purpose"`
 	OriginatedFrom   int32              `json:"originated_from"`
 	UsedInstallation int32              `json:"used_installation"`

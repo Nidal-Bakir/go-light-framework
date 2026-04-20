@@ -7,6 +7,7 @@ CREATE TABLE session (
   expires_at TIMESTAMPTZ NOT NULL,
   created_at TIMESTAMPTZ DEFAULT NOW() NOT NULL,
   updated_at TIMESTAMPTZ DEFAULT NOW() NOT NULL,
+  deleted_at TIMESTAMPTZ,
   purpose TEXT NOT NULL, -- login, mfa, etc....
   originated_from INTEGER NOT NULL REFERENCES login_identity (id) ON DELETE CASCADE
 );

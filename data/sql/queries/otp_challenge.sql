@@ -29,7 +29,7 @@ UPDATE otp_challenge
 SET attempts = attempts + @inc
 WHERE id = @id 
  AND attempts < @attemptsLimit
- AND expires_at < NOW()
+ AND expires_at > NOW()
 RETURNING attempts;
 
 

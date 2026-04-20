@@ -29,12 +29,14 @@ func NewSender(_ context.Context, provider gateway.ProviderFactory, otpLength ui
 func (o Sender) SendOTP(ctx context.Context, option Options) (err error) {
 	var content string
 
-	switch option.Purpose {
-	case AccountVerification:
-		content = option.Otp
-	case ResetPassword:
-		content = option.Otp
-	}
+	option.Purpose.FoldOr(
+		OtpPurposeFoldActions{
+			//TODO: implement each case
+		},
+		func() {
+			content = option.Otp
+		},
+	)
 
 	if option.PhoneTarget != nil {
 		phoneErr := o.sendSmsOtp(ctx, option.PhoneTarget, content)

@@ -121,7 +121,7 @@ func (q *Queries) SessionDeleteSession(ctx context.Context, id int64) error {
 }
 
 const sessionGetActiveSessionById = `-- name: SessionGetActiveSessionById :one
-SELECT id, token, ip_address, expires_at, created_at, updated_at, purpose, originated_from, used_installation
+SELECT id, token, ip_address, expires_at, created_at, updated_at, deleted_at, purpose, originated_from, used_installation
 FROM active_session
 WHERE id = $1
 LIMIT 1
@@ -129,7 +129,7 @@ LIMIT 1
 
 // SessionGetActiveSessionById
 //
-//	SELECT id, token, ip_address, expires_at, created_at, updated_at, purpose, originated_from, used_installation
+//	SELECT id, token, ip_address, expires_at, created_at, updated_at, deleted_at, purpose, originated_from, used_installation
 //	FROM active_session
 //	WHERE id = $1
 //	LIMIT 1
@@ -143,6 +143,7 @@ func (q *Queries) SessionGetActiveSessionById(ctx context.Context, id int64) (Ac
 		&i.ExpiresAt,
 		&i.CreatedAt,
 		&i.UpdatedAt,
+		&i.DeletedAt,
 		&i.Purpose,
 		&i.OriginatedFrom,
 		&i.UsedInstallation,
@@ -151,7 +152,7 @@ func (q *Queries) SessionGetActiveSessionById(ctx context.Context, id int64) (Ac
 }
 
 const sessionGetActiveSessionByToken = `-- name: SessionGetActiveSessionByToken :one
-SELECT id, token, ip_address, expires_at, created_at, updated_at, purpose, originated_from, used_installation
+SELECT id, token, ip_address, expires_at, created_at, updated_at, deleted_at, purpose, originated_from, used_installation
 FROM active_session
 WHERE token = $1
 LIMIT 1
@@ -159,7 +160,7 @@ LIMIT 1
 
 // SessionGetActiveSessionByToken
 //
-//	SELECT id, token, ip_address, expires_at, created_at, updated_at, purpose, originated_from, used_installation
+//	SELECT id, token, ip_address, expires_at, created_at, updated_at, deleted_at, purpose, originated_from, used_installation
 //	FROM active_session
 //	WHERE token = $1
 //	LIMIT 1
@@ -173,9 +174,26 @@ func (q *Queries) SessionGetActiveSessionByToken(ctx context.Context, token stri
 		&i.ExpiresAt,
 		&i.CreatedAt,
 		&i.UpdatedAt,
+		&i.DeletedAt,
 		&i.Purpose,
 		&i.OriginatedFrom,
 		&i.UsedInstallation,
 	)
 	return i, err
+}
+
+const sessionSoftDeleteSession = `-- name: SessionSoftDeleteSession :exec
+UPDATE session SET
+deleted_at = NOW()
+WHERE id = $1
+`
+
+// SessionSoftDeleteSession
+//
+//	UPDATE session SET
+//	deleted_at = NOW()
+//	WHERE id = $1
+func (q *Queries) SessionSoftDeleteSession(ctx context.Context, id int64) error {
+	_, err := q.db.Exec(ctx, sessionSoftDeleteSession, id)
+	return err
 }

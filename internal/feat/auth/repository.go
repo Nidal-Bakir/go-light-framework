@@ -476,7 +476,13 @@ func (repo repositoryImpl) PasswordLogin(
 				zlog.Err(err).Msg("error while storing login_identity_id on the session")
 				return nil, false, "", err
 			}
-			return nil, isMfaEnabled, mfaSessionToken.String(), nil
+			token := mfaSessionToken.String()
+			err = repo.dataSource.CreateNewSession(ctx, userWithLoginIdentity.LoginIdentityID, installation.ID, token, ipAddress, expiresAt, SessionPurposeMFA)
+			if err != nil {
+				zlog.Err(err).Msg("error can not store a new session for mfa purpose")
+				return nil, false, "", err
+			}
+			return nil, isMfaEnabled, token, nil
 		}
 	}
 
@@ -836,29 +842,7 @@ func (repo repositoryImpl) CreateEmailMfa(ctx context.Context, userId int32, ema
 		}
 	}
 
-	// found an entry!
-	if err == nil {
-		// if the ownership berification id is null then we can send a new one for the user
-		// because the old one is expired and removed
-		if !entry.OwnershipVerification.Valid {
-			otpId, err := repo.sendOtp(
-				ctx,
-				PasswordLoginAccessKey{LoginIdentityType: LoginIdentityTypeEmail, Email: &email},
-				otp.MfaEmailVerification,
-				OtpChallengExpirationForMfaVerification,
-			)
-			if err != nil {
-				zlog.Err(err).Msg("error can not send the otp to verify the email mfa")
-				return -1, err
-			}
-			err = repo.dataSource.MfaUpdateOwnershipVerificationForMfaMethodTypeEmail(ctx, entry.ID, otpId)
-			if err != nil {
-				zlog.Err(err).Msg("error can not update the ownership verification for mfa method type email")
-				return -1, err
-			}
-		}
-		return entry.ID, nil
-	} else {
+	if err != nil { // ErrNoResult (did not find an entry with this email)
 		otpId, err := repo.sendOtp(
 			ctx,
 			PasswordLoginAccessKey{LoginIdentityType: LoginIdentityTypeEmail, Email: &email},
@@ -877,6 +861,39 @@ func (repo repositoryImpl) CreateEmailMfa(ctx context.Context, userId int32, ema
 		}
 		return id, nil
 	}
+
+	// found an entry!
+
+	// we only process entries that have pedding status
+	if entry.Status != MfaStatusPending.String() {
+		return entry.ID, apperr.ErrAlreadyUsedEmail
+	}
+
+	if entry.OwnershipVerification.Valid {
+		return entry.ID, nil
+	}
+
+	// If the ownership verification id is null(not valid)
+	// then we can send a new one for the user
+	// because the old one is expired and removed
+
+	otpId, err := repo.sendOtp(
+		ctx,
+		PasswordLoginAccessKey{LoginIdentityType: LoginIdentityTypeEmail, Email: &email},
+		otp.MfaEmailVerification,
+		OtpChallengExpirationForMfaVerification,
+	)
+	if err != nil {
+		zlog.Err(err).Msg("error can not send the otp to verify the email mfa")
+		return -1, err
+	}
+	err = repo.dataSource.MfaUpdateOwnershipVerificationForMfaMethodTypeEmail(ctx, entry.ID, otpId)
+	if err != nil {
+		zlog.Err(err).Msg("error can not update the ownership verification for mfa method type email")
+		return -1, err
+	}
+
+	return entry.ID, nil
 }
 
 func (repo repositoryImpl) VerifyMfaOwnership(ctx context.Context, userId int32, mfaId int32, otpCode string) error {
@@ -949,6 +966,12 @@ func (repo repositoryImpl) VerifyPendingOtpMfa(
 		if !errors.Is(err, apperr.ErrInvalidOtpCode) {
 			zlog.Err(err).Msg("error while checking the otp")
 		}
+		return nil, "", err
+	}
+
+	err = repo.dataSource.DeleteMfaSession(ctx, mfaSessionId)
+	if err != nil {
+		zlog.Err(err).Msg("error can not delete mfa session after successful verification")
 		return nil, "", err
 	}
 

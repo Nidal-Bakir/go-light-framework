@@ -61,6 +61,7 @@ func mfaRouter(ctx context.Context, s *Server, authRepo auth.Repository) http.Ha
 		"POST /verify-pending-mfa",
 		middleware.MiddlewareChain(
 			mfaVerifyPendingOtpMfa(authRepo),
+			Installation(authRepo),
 			AuthForMFA(authRepo),
 		),
 	)
@@ -324,10 +325,10 @@ func mfaVerifyPendingOtpMfa(authRepo auth.Repository) http.HandlerFunc {
 		}
 
 		response := struct {
-			User  publicUser `json:"user"`
+			User  *publicUser `json:"user"`
 			Token string     `json:"token"`
 		}{
-			User:  NewPublicUserFromAuthUser(*user),
+			User:  NewPublicUserFromAuthUser(user),
 			Token: token,
 		}
 		writeResponse(ctx, w, r, http.StatusCreated, response)

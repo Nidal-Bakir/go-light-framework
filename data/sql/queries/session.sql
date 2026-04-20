@@ -33,6 +33,11 @@ LIMIT 1;
 DELETE FROM session
 WHERE id = $1;
 
+-- name: SessionSoftDeleteSession :exec
+UPDATE session SET
+deleted_at = NOW()
+WHERE id = $1;
+
 -- name: SessionDeleteAllActiveSessionsForUser :exec
 DELETE FROM session AS s
 USING active_login_identity AS li

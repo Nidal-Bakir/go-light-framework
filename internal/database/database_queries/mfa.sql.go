@@ -146,10 +146,10 @@ RETURNING
 `
 
 type MfaCreateTypeEmailParams struct {
-	OwnershipVerification uuid.UUID   `json:"ownership_verification"`
-	Email                 string      `json:"email"`
-	UserID                int32       `json:"user_id"`
-	Label                 pgtype.Text `json:"label"`
+	OwnershipVerification uuid.UUID `json:"ownership_verification"`
+	Email                 string    `json:"email"`
+	UserID                int32     `json:"user_id"`
+	Label                 string    `json:"label"`
 }
 
 // MfaCreateTypeEmail
@@ -228,10 +228,10 @@ RETURNING
 `
 
 type MfaCreateTypePhoneParams struct {
-	OwnershipVerification uuid.UUID   `json:"ownership_verification"`
-	Phone                 string      `json:"phone"`
-	UserID                int32       `json:"user_id"`
-	Label                 pgtype.Text `json:"label"`
+	OwnershipVerification uuid.UUID `json:"ownership_verification"`
+	Phone                 string    `json:"phone"`
+	UserID                int32     `json:"user_id"`
+	Label                 string    `json:"label"`
 }
 
 // MfaCreateTypePhone
