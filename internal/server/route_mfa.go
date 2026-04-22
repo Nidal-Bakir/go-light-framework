@@ -97,8 +97,7 @@ func mfaRegisterOtp(authRepo auth.Repository) http.HandlerFunc {
 		if params.Email != nil {
 			mfaId, err = authRepo.CreateEmailMfa(ctx, userAndSession.UserID, *params.Email)
 		} else if params.Phone != nil {
-			// TODO: implement the phone
-			// mfaId, err = authRepo.CreatePhoneMfa(ctx, userAndSession.UserID, *params.Phone)
+			mfaId, err = authRepo.CreatePhoneMfa(ctx, userAndSession.UserID, *params.Phone)
 		}
 		if err != nil {
 			writeError(ctx, w, r, return400IfAppErrOr500(err), err)
@@ -119,29 +118,20 @@ func validateMfaRegisterOtpParam(r *http.Request) (mfaRegisterOtpParams, []error
 	errList := make([]error, 0, 1)
 
 	emailStr := r.FormValue("email")
-	phoneStr := r.FormValue("phone")
-
-	if emailStr == "" && phoneStr == "" {
-		errList = append(errList, fmt.Errorf("Invalid data. You must specify either the email or phone field."))
+	if emailStr != "" {
+		email, err := email.Parse(emailStr)
+		params.Email = email
+		if err != nil {
+			errList = append(errList, apperr.ErrInvalidEmail)
+		}
 		return params, errList
 	}
 
-	if emailStr != "" {
-		email, err := email.Parse(emailStr)
-		if err != nil {
-			errList = append(errList, apperr.ErrInvalidEmail)
-			return params, errList
-		}
-		params.Email = email
-	} else if phoneStr != "" {
-		phone, err := phonenumber.Parse(emailStr)
-		if err != nil {
-			errList = append(errList, apperr.ErrInvalidPhoneNumber)
-			return params, errList
-		}
-		params.Phone = phone
+	phone, err := phonenumber.ParseAndValidate(assumablePhoneNumberFromRequest(r))
+	if err != nil {
+		errList = append(errList, apperr.ErrInvalidPhoneNumber)
 	}
-
+	params.Phone = phone
 	return params, errList
 }
 
@@ -326,7 +316,7 @@ func mfaVerifyPendingOtpMfa(authRepo auth.Repository) http.HandlerFunc {
 
 		response := struct {
 			User  *publicUser `json:"user"`
-			Token string     `json:"token"`
+			Token string      `json:"token"`
 		}{
 			User:  NewPublicUserFromAuthUser(user),
 			Token: token,

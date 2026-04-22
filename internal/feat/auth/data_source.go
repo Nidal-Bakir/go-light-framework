@@ -87,6 +87,7 @@ type DataSource interface {
 	ChangeMfaMethodStatus(ctx context.Context, mfaId int32, newStatus MfaStatus) error
 
 	GetMfaMethod(ctx context.Context, userId, mfaId int32) (database_queries.MfaGetMethodRow, error)
+	GetActiveMfaMethod(ctx context.Context, userId, mfaId int32) (database_queries.MfaGetMethodRow, error)
 	GetAllMfaMethodsForUser(ctx context.Context, userId int32) ([]database_queries.MfaGetAllMfaMethodsForUserRow, error)
 	MfaGetAllActiveMfaMethodsForUser(ctx context.Context, userId int32) ([]database_queries.MfaGetAllActiveMfaMethodsForUserRow, error)
 
@@ -846,10 +847,10 @@ func (ds dataSourceImpl) CreateEmailMfa(ctx context.Context, userId int32, email
 }
 
 func (ds dataSourceImpl) CreatePhoneMfa(ctx context.Context, userId int32, phone phonenumber.PhoneNumber, ownershipVerificationId uuid.UUID) (id int32, err error) {
-	return ds.db.Queries.MfaCreateTypeEmail(
+	return ds.db.Queries.MfaCreateTypePhone(
 		ctx,
-		database_queries.MfaCreateTypeEmailParams{
-			Email:                 phone.ToE164(),
+		database_queries.MfaCreateTypePhoneParams{
+			Phone:                 phone.ToE164(),
 			OwnershipVerification: ownershipVerificationId,
 			UserID:                userId,
 		},
@@ -870,6 +871,10 @@ func (ds dataSourceImpl) GetMfaMethod(ctx context.Context, userId, mfaId int32) 
 	return ds.db.Queries.MfaGetMethod(ctx, database_queries.MfaGetMethodParams{ID: mfaId, UserID: userId})
 }
 
+func (ds dataSourceImpl) GetActiveMfaMethod(ctx context.Context, userId, mfaId int32) (database_queries.MfaGetMethodRow, error) {
+	return ds.db.Queries.MfaGetMethod(ctx, database_queries.MfaGetMethodParams{ID: mfaId, UserID: userId, Status: database.ToPgTypeText(MfaStatusVerified.String())})
+}
+
 func (ds dataSourceImpl) GetAllMfaMethodsForUser(ctx context.Context, userId int32) ([]database_queries.MfaGetAllMfaMethodsForUserRow, error) {
 	return ds.db.Queries.MfaGetAllMfaMethodsForUser(ctx, userId)
 }
@@ -879,10 +884,12 @@ func (ds dataSourceImpl) MfaGetAllActiveMfaMethodsForUser(ctx context.Context, u
 }
 
 func (ds dataSourceImpl) MfaGetEmailMfaForUser(ctx context.Context, userId int32, email email.Email) (database_queries.MfaGetEmailMfaForUserRow, error) {
-	data, err := ds.db.Queries.MfaGetEmailMfaForUser(ctx, database_queries.MfaGetEmailMfaForUserParams{
-		UserID: userId,
-		Email:  email.String(),
-	})
+	data, err := ds.db.Queries.MfaGetEmailMfaForUser(
+		ctx,
+		database_queries.MfaGetEmailMfaForUserParams{
+			UserID: userId,
+			Email:  email.String(),
+		})
 	if database.IsErrPgxNoRows(err) {
 		err = apperr.ErrNoResult
 	}
@@ -890,10 +897,12 @@ func (ds dataSourceImpl) MfaGetEmailMfaForUser(ctx context.Context, userId int32
 }
 
 func (ds dataSourceImpl) MfaGetPhoneMfaForUser(ctx context.Context, userId int32, phone phonenumber.PhoneNumber) (database_queries.MfaGetPhoneMfaForUserRow, error) {
-	data, err := ds.db.Queries.MfaGetPhoneMfaForUser(ctx, database_queries.MfaGetPhoneMfaForUserParams{
-		UserID: userId,
-		Phone:  phone.ToE164(),
-	})
+	data, err := ds.db.Queries.MfaGetPhoneMfaForUser(
+		ctx,
+		database_queries.MfaGetPhoneMfaForUserParams{
+			UserID: userId,
+			Phone:  phone.ToE164(),
+		})
 	if database.IsErrPgxNoRows(err) {
 		err = apperr.ErrNoResult
 	}

@@ -81,7 +81,6 @@ func authBySessionPurpose(authRepo auth.Repository, sessionPurpose auth.SessionP
 				return
 			}
 
-		 
 			ctx = auth.ContextWithUserAndSession(ctx, userAndSessionData)
 			ctx = zlog.With().Int32("user_id", userAndSessionData.UserID).Int64("session_id", userAndSessionData.SessionID).Logger().WithContext(ctx)
 

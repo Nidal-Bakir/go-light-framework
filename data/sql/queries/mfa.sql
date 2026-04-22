@@ -169,7 +169,11 @@ FROM
   LEFT JOIN mfa_method_type_hotp AS h ON m.id = h.id
 WHERE
   m.id = @id::INT
-  AND m.user_id = @user_id::INT;
+  AND m.user_id = @user_id::INT
+  AND (
+    sqlc.narg(status)::TEXT IS NULL
+    OR m.status = @status::TEXT
+  );
 
 -- name: MfaGetAllMfaMethodsForUser :many
 SELECT
@@ -246,7 +250,7 @@ VALUES
   (
     @mfa_session::UUID,
     @mfa_method::INT,
-    sqlc.narg (otp_challenge)::UUID,
+    sqlc.narg(otp_challenge)::UUID,
     @expires_at::TIMESTAMPTZ
   );
 

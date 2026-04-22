@@ -580,11 +580,16 @@ FROM
 WHERE
   m.id = $1::INT
   AND m.user_id = $2::INT
+  AND (
+    $3::TEXT IS NULL
+    OR m.status = $3::TEXT
+  )
 `
 
 type MfaGetMethodParams struct {
-	ID     int32 `json:"id"`
-	UserID int32 `json:"user_id"`
+	ID     int32       `json:"id"`
+	UserID int32       `json:"user_id"`
+	Status pgtype.Text `json:"status"`
 }
 
 type MfaGetMethodRow struct {
@@ -620,8 +625,12 @@ type MfaGetMethodRow struct {
 //	WHERE
 //	  m.id = $1::INT
 //	  AND m.user_id = $2::INT
+//	  AND (
+//	    $3::TEXT IS NULL
+//	    OR m.status = $3::TEXT
+//	  )
 func (q *Queries) MfaGetMethod(ctx context.Context, arg MfaGetMethodParams) (MfaGetMethodRow, error) {
-	row := q.db.QueryRow(ctx, mfaGetMethod, arg.ID, arg.UserID)
+	row := q.db.QueryRow(ctx, mfaGetMethod, arg.ID, arg.UserID, arg.Status)
 	var i MfaGetMethodRow
 	err := row.Scan(
 		&i.ID,

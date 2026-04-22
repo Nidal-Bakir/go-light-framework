@@ -64,6 +64,7 @@ type Repository interface {
 	LoginOrCreateUserWithOidc(ctx context.Context, ipAddress netip.Addr, installation Installation, data LoginOrCreateUserWithOidcRepoParam) (user User, token string, err error)
 
 	CreateEmailMfa(ctx context.Context, userId int32, email email.Email) (id int32, err error)
+	CreatePhoneMfa(ctx context.Context, userId int32, phone phonenumber.PhoneNumber) (id int32, err error)
 	VerifyMfaOwnership(ctx context.Context, userId int32, mfaId int32, otpCode string) error
 
 	GetAllMfaMethodsForUser(ctx context.Context, userId int) ([]database_queries.MfaGetAllMfaMethodsForUserRow, error)
@@ -896,6 +897,71 @@ func (repo repositoryImpl) CreateEmailMfa(ctx context.Context, userId int32, ema
 	return entry.ID, nil
 }
 
+func (repo repositoryImpl) CreatePhoneMfa(ctx context.Context, userId int32, phone phonenumber.PhoneNumber) (id int32, err error) {
+	zlog := zerolog.Ctx(ctx)
+
+	entry, err := repo.dataSource.MfaGetPhoneMfaForUser(ctx, int32(userId), phone)
+	if err != nil {
+		if !errors.Is(err, apperr.ErrNoResult) {
+			zlog.Err(err).Msg("error can not check if the user already have this phone as mfa")
+			return -1, err
+		}
+	}
+
+	if err != nil { // ErrNoResult (did not find an entry with this email)
+		otpId, err := repo.sendOtp(
+			ctx,
+			PasswordLoginAccessKey{LoginIdentityType: LoginIdentityTypePhone, Phone: &phone},
+			otp.MfaPhoneVerification,
+			OtpChallengExpirationForMfaVerification,
+		)
+		if err != nil {
+			zlog.Err(err).Msg("error can not send the otp to verify the phone mfa")
+			return -1, err
+		}
+
+		id, err = repo.dataSource.CreatePhoneMfa(ctx, userId, phone, otpId)
+		if err != nil {
+			zlog.Err(err).Msg("error can not create phone mfa")
+			return -1, err
+		}
+		return id, nil
+	}
+
+	// found an entry!
+
+	// we only process entries that have pedding status
+	if entry.Status != MfaStatusPending.String() {
+		return entry.ID, apperr.ErrAlreadyUsedPhoneNumber
+	}
+
+	if entry.OwnershipVerification.Valid {
+		return entry.ID, nil
+	}
+
+	// If the ownership verification id is null(not valid)
+	// then we can send a new one for the user
+	// because the old one is expired and removed
+
+	otpId, err := repo.sendOtp(
+		ctx,
+		PasswordLoginAccessKey{LoginIdentityType: LoginIdentityTypePhone, Phone: &phone},
+		otp.MfaPhoneVerification,
+		OtpChallengExpirationForMfaVerification,
+	)
+	if err != nil {
+		zlog.Err(err).Msg("error can not send the otp to verify the phone mfa")
+		return -1, err
+	}
+	err = repo.dataSource.MfaUpdateOwnershipVerificationForMfaMethodTypePhone(ctx, entry.ID, otpId)
+	if err != nil {
+		zlog.Err(err).Msg("error can not update the ownership verification for mfa method type phone")
+		return -1, err
+	}
+
+	return entry.ID, nil
+}
+
 func (repo repositoryImpl) VerifyMfaOwnership(ctx context.Context, userId int32, mfaId int32, otpCode string) error {
 	zlog := zerolog.Ctx(ctx)
 	otpId, err := repo.dataSource.GetOwnershipVerificationIdForMfa(ctx, userId, mfaId)
@@ -1024,6 +1090,19 @@ func (repo repositoryImpl) GetAllActiveMfaMethodsForUser(ctx context.Context, us
 	if err != nil {
 		zlog.Err(err).Msg("error can not get all the active mfa methods for a user")
 	}
+
+	for i := range result {
+		e := &result[i]
+		if e.MethodType == MfaMethodTypeEmail.String() {
+			e.MethodEmailEmail.String = email.MustParse(e.MethodEmailEmail.String).Masked()
+			continue
+		}
+		if e.MethodType == MfaMethodTypePhone.String() {
+			e.MethodPhonePhone.String = phonenumber.MustParse(e.MethodPhonePhone.String).FormatToInternationalMasked()
+			continue
+		}
+	}
+
 	return result, err
 }
 
@@ -1039,7 +1118,7 @@ func (repo repositoryImpl) AddPendingMfaSession(ctx context.Context, sessionToke
 		return apperr.ErrNoResult
 	}
 
-	result, err := repo.dataSource.GetMfaMethod(ctx, userId, mfaMethodId)
+	result, err := repo.dataSource.GetActiveMfaMethod(ctx, userId, mfaMethodId)
 	if err != nil {
 		if database.IsErrPgxNoRows(err) {
 			err = apperr.ErrNoResult
