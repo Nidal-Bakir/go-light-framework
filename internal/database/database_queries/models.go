@@ -203,17 +203,6 @@ type MfaMethodTypeEmail struct {
 	UpdatedAt             pgtype.Timestamptz `json:"updated_at"`
 }
 
-type MfaMethodTypeHotp struct {
-	ID        int32              `json:"id"`
-	SecretKey string             `json:"secret_key"`
-	Algorithm string             `json:"algorithm"`
-	Digits    int32              `json:"digits"`
-	Issuer    string             `json:"issuer"`
-	Counter   int32              `json:"counter"`
-	CreatedAt pgtype.Timestamptz `json:"created_at"`
-	UpdatedAt pgtype.Timestamptz `json:"updated_at"`
-}
-
 type MfaMethodTypePhone struct {
 	ID                    int32              `json:"id"`
 	OwnershipVerification pgtype.UUID        `json:"ownership_verification"`
@@ -223,15 +212,14 @@ type MfaMethodTypePhone struct {
 }
 
 type MfaMethodTypeTotp struct {
-	ID          int32              `json:"id"`
-	SecretKey   string             `json:"secret_key"`
-	Algorithm   string             `json:"algorithm"`
-	Digits      int32              `json:"digits"`
-	Issuer      string             `json:"issuer"`
-	TimeStep    int32              `json:"time_step"`
-	InitialTime int32              `json:"initial_time"`
-	CreatedAt   pgtype.Timestamptz `json:"created_at"`
-	UpdatedAt   pgtype.Timestamptz `json:"updated_at"`
+	ID        int32              `json:"id"`
+	SecretKey string             `json:"secret_key"`
+	Algorithm string             `json:"algorithm"`
+	Digits    int32              `json:"digits"`
+	Period    int32              `json:"period"`
+	Issuer    string             `json:"issuer"`
+	CreatedAt pgtype.Timestamptz `json:"created_at"`
+	UpdatedAt pgtype.Timestamptz `json:"updated_at"`
 }
 
 type MfaRememberedDevice struct {

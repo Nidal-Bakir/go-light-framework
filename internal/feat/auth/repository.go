@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"net/netip"
+	"os"
 	"strconv"
 	"time"
 
@@ -67,8 +68,11 @@ type Repository interface {
 	CreatePhoneMfa(ctx context.Context, userId int32, phone phonenumber.PhoneNumber) (id int32, err error)
 	VerifyMfaOwnership(ctx context.Context, userId int32, mfaId int32, otpCode string) error
 
+	EnrollUserInTotpMfa(ctx context.Context, userAndSession UserAndSession) (id int32, err error)
+	ValidateTotpEnrollment(ctx context.Context, userId int32, totpCode string, id int32) error
+
 	GetAllMfaMethodsForUser(ctx context.Context, userId int) ([]database_queries.MfaGetAllMfaMethodsForUserRow, error)
-	GetAllActiveMfaMethodsForUser(ctx context.Context, userId int) ([]database_queries.MfaGetAllActiveMfaMethodsForUserRow, error)
+	GetAllActiveMfaMethodsForUser(ctx context.Context, userId int) ([]database_queries.MfaGetAllMfaMethodsForUserRow, error)
 
 	AddPendingMfaSession(ctx context.Context, sessionToken session.Session, userId, mfaId int32) error
 	VerifyPendingOtpMfa(ctx context.Context, mfaId int32, otpCode string, userAndSession UserAndSession, ipAddress netip.Addr, installation Installation, deviceFingerprint string) (*User, string, error)
@@ -1077,16 +1081,16 @@ func (repo repositoryImpl) VerifyPendingOtpMfa(
 
 func (repo repositoryImpl) GetAllMfaMethodsForUser(ctx context.Context, userId int) ([]database_queries.MfaGetAllMfaMethodsForUserRow, error) {
 	zlog := zerolog.Ctx(ctx)
-	result, err := repo.dataSource.GetAllMfaMethodsForUser(ctx, int32(userId))
+	result, err := repo.dataSource.GetAllMfaMethodsForUser(ctx, int32(userId), nil)
 	if err != nil {
 		zlog.Err(err).Msg("error can not get all the mfa methods for a user")
 	}
 	return result, err
 }
 
-func (repo repositoryImpl) GetAllActiveMfaMethodsForUser(ctx context.Context, userId int) ([]database_queries.MfaGetAllActiveMfaMethodsForUserRow, error) {
+func (repo repositoryImpl) GetAllActiveMfaMethodsForUser(ctx context.Context, userId int) ([]database_queries.MfaGetAllMfaMethodsForUserRow, error) {
 	zlog := zerolog.Ctx(ctx)
-	result, err := repo.dataSource.MfaGetAllActiveMfaMethodsForUser(ctx, int32(userId))
+	result, err := repo.dataSource.GetAllMfaMethodsForUser(ctx, int32(userId), &MfaMethodsFilter{Status: MfaStatusVerified})
 	if err != nil {
 		zlog.Err(err).Msg("error can not get all the active mfa methods for a user")
 	}
@@ -1196,4 +1200,65 @@ func (repo repositoryImpl) AddPendingMfaSession(ctx context.Context, sessionToke
 	}
 
 	return nil
+}
+
+func (repo repositoryImpl) EnrollUserInTotpMfa(ctx context.Context, userAndSession UserAndSession) (id int32, err error) {
+	zlog := zerolog.Ctx(ctx)
+
+	result, err := repo.dataSource.GetAllMfaMethodsForUser(ctx, userAndSession.UserID, &MfaMethodsFilter{MethodType: MfaMethodTypeTotp})
+	if err != nil {
+		zlog.Err(err).Msg("error can not get all the active mfa methods for a user")
+		return -1, err
+	}
+	if len(result) != 0 {
+		return -1, fmt.Errorf("can not have more then one totp method at the time")
+	}
+
+	key, err := otp.NewTotpKey(userAndSession.UserUsername, os.Getenv("APP_NAME"))
+	if err != nil {
+		zlog.Err(err).Msg("error can not add pending mfa session")
+		return -1, err
+	}
+	encryptedSecretKey, err := key.EncryptedSecretKey()
+	if err != nil {
+		zlog.Err(err).Msg("error can not encrypt the secret totp key")
+		return -1, err
+	}
+
+	id, err = repo.dataSource.CreateTotpMfa(
+		ctx,
+		userAndSession.UserID,
+		encryptedSecretKey,
+		key.Algorithm(),
+		key.Digits(),
+		key.Period(),
+		key.Issuer(),
+	)
+	if err != nil {
+		zlog.Err(err).Msg("error can not create totp mfa method")
+		return -1, err
+	}
+	return id, err
+}
+
+func (repo repositoryImpl) ValidateTotpEnrollment(ctx context.Context, userId int32, totpCode string, mfaId int32) error {
+	zlog := zerolog.Ctx(ctx)
+
+	totp, err := repo.dataSource.MfaGetTotpMethod(ctx, userId, mfaId)
+	if err != nil {
+		zlog.Err(err).Msg("error can not get the mfa method totp")
+		return err
+	}
+	if totp.MethodType != MfaMethodTypeTotp.String() || totp.Status != MfaStatusPending.String() {
+		return apperr.ErrNoResult
+	}
+	isValid := otp.ValidateTotp(totpCode, totp.MethodTotpSecretKey.String)
+	if isValid {
+		err = repo.dataSource.ChangeMfaMethodStatus(ctx, mfaId, MfaStatusVerified)
+		if err != nil {
+			zlog.Err(err).Msg("error can not change the mfa status")
+		}
+		return err
+	}
+	return apperr.ErrInvalidOtpCode
 }

@@ -4,12 +4,7 @@ WITH
     INSERT INTO
       mfa_method (status, method_type, user_id, label)
     VALUES
-      (
-        'pending',
-        'email',
-        @user_id::INT,
-        @label::TEXT
-      )
+      ('pending', 'email', @user_id::INT, @label::TEXT)
     RETURNING
       id
   )
@@ -80,12 +75,7 @@ WITH
     INSERT INTO
       mfa_method (status, method_type, user_id, label)
     VALUES
-      (
-        'pending',
-        'phone',
-        @user_id::INT,
-        @label::TEXT
-      )
+      ('pending', 'phone', @user_id::INT, @label::TEXT)
     RETURNING
       id
   )
@@ -159,21 +149,47 @@ SELECT
   m.label AS label,
   e.email AS method_email_email,
   p.phone AS method_phone_phone,
-  t.algorithm AS method_totp_algorithm,
-  h.algorithm AS method_hotp_algorithm
+  t.algorithm AS method_totp_algorithm
 FROM
   mfa_method AS m
   LEFT JOIN mfa_method_type_email AS e ON m.id = e.id
   LEFT JOIN mfa_method_type_phone AS p ON m.id = p.id
   LEFT JOIN mfa_method_type_totp AS t ON m.id = t.id
-  LEFT JOIN mfa_method_type_hotp AS h ON m.id = h.id
 WHERE
-  m.id = @id::INT
-  AND m.user_id = @user_id::INT
+  m.user_id = @user_id::INT
+  AND m.id = @id::INT
   AND (
     sqlc.narg(status)::TEXT IS NULL
     OR m.status = @status::TEXT
-  );
+  )
+LIMIT
+  1;
+  
+-- name: MfaGetTotpMethod :one
+SELECT
+  m.id AS id,
+  m.status AS status,
+  m.method_type AS method_type,
+  m.user_id AS user_id,
+  m.label AS label,
+  t.secret_key AS method_totp_secret_key,
+  t.algorithm AS method_totp_algorithm,
+  t.digits AS method_totp_digits,
+  t.period AS method_totp_period,
+  t.issuer AS method_totp_issuer
+FROM
+  mfa_method AS m
+  LEFT JOIN mfa_method_type_totp AS t ON m.id = t.id
+WHERE
+  m.user_id = @user_id::INT
+  AND m.id = @id::INT
+  AND m.method_type = 'totp'
+  AND (
+    sqlc.narg(status)::TEXT IS NULL
+    OR m.status = @status::TEXT
+  )
+LIMIT
+  1;
 
 -- name: MfaGetAllMfaMethodsForUser :many
 SELECT
@@ -184,37 +200,22 @@ SELECT
   m.label AS label,
   e.email AS method_email_email,
   p.phone AS method_phone_phone,
-  t.algorithm AS method_totp_algorithm,
-  h.algorithm AS method_hotp_algorithm
+  t.algorithm AS method_totp_algorithm
 FROM
   mfa_method AS m
   LEFT JOIN mfa_method_type_email AS e ON e.id = m.id
   LEFT JOIN mfa_method_type_phone AS p ON p.id = m.id
   LEFT JOIN mfa_method_type_totp AS t ON t.id = m.id
-  LEFT JOIN mfa_method_type_hotp AS h ON h.id = m.id
-WHERE
-  m.user_id = @user_id::INT;
-
--- name: MfaGetAllActiveMfaMethodsForUser :many
-SELECT
-  m.id AS id,
-  m.status AS status,
-  m.method_type AS method_type,
-  m.user_id AS user_id,
-  m.label AS label,
-  e.email AS method_email_email,
-  p.phone AS method_phone_phone,
-  t.algorithm AS method_totp_algorithm,
-  h.algorithm AS method_hotp_algorithm
-FROM
-  mfa_method AS m
-  LEFT JOIN mfa_method_type_email AS e ON e.id = m.id
-  LEFT JOIN mfa_method_type_phone AS p ON p.id = m.id
-  LEFT JOIN mfa_method_type_totp AS t ON t.id = m.id
-  LEFT JOIN mfa_method_type_hotp AS h ON h.id = m.id
 WHERE
   m.user_id = @user_id::INT
-  AND m.status = 'verified';
+  AND (
+    sqlc.narg(method_type)::TEXT IS NULL
+    OR m.method_type = @method_type::TEXT
+  )
+  AND (
+    sqlc.narg(status)::TEXT IS NULL
+    OR m.status = @status::TEXT
+  );
 
 -- name: MfaStartMfaSession :one
 INSERT INTO
@@ -373,3 +374,31 @@ WHERE
   AND device_fingerprint = @device_fingerprint::TEXT
   AND expires_at > NOW();
 
+-- name: MfaCreateTypeTotp :one
+WITH
+  new_mfa_method AS (
+    INSERT INTO
+      mfa_method (status, method_type, user_id, label)
+    VALUES
+      ('pending', 'totp', @user_id::INT, @label::TEXT)
+    RETURNING
+      id
+  )
+INSERT INTO
+  mfa_method_type_totp (id, secret_key, algorithm, digits, period, issuer)
+VALUES
+  (
+    (
+      SELECT
+        id
+      FROM
+        new_mfa_method
+    ),
+    @secret_key::TEXT,
+    @algorithm::TEXT,
+    @digits::INT,
+    @period::INT,
+    @issuer::TEXT
+  )
+RETURNING
+  id;

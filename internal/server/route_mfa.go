@@ -201,7 +201,6 @@ type publicMfaMethods struct {
 	MethodEmailEmail    string `json:"email,omitzero"`
 	MethodPhonePhone    string `json:"phone,omitzero"`
 	MethodTotpAlgorithm string `json:"totp_algorithm,omitzero"`
-	MethodHotpAlgorithm string `json:"hotp_algorithm,omitzero"`
 }
 
 func mfaListMfas(authRepo auth.Repository, activeOnly bool) http.HandlerFunc {
@@ -226,7 +225,6 @@ func mfaListMfas(authRepo auth.Repository, activeOnly bool) http.HandlerFunc {
 					MethodEmailEmail:    e.MethodEmailEmail.String,
 					MethodPhonePhone:    e.MethodPhonePhone.String,
 					MethodTotpAlgorithm: e.MethodTotpAlgorithm.String,
-					MethodHotpAlgorithm: e.MethodHotpAlgorithm.String,
 				}
 			}
 		} else {
@@ -245,7 +243,6 @@ func mfaListMfas(authRepo auth.Repository, activeOnly bool) http.HandlerFunc {
 					MethodEmailEmail:    e.MethodEmailEmail.String,
 					MethodPhonePhone:    e.MethodPhonePhone.String,
 					MethodTotpAlgorithm: e.MethodTotpAlgorithm.String,
-					MethodHotpAlgorithm: e.MethodHotpAlgorithm.String,
 				}
 			}
 		}

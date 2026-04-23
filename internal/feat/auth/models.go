@@ -60,7 +60,6 @@ const (
 	MfaMethodTypeEmail    MfaMethodType = "email"
 	MfaMethodTypePhone    MfaMethodType = "phone"
 	MfaMethodTypeTotp     MfaMethodType = "totp"
-	MfaMethodTypeHotp     MfaMethodType = "hotp"
 	MfaMethodTypeWebauthn MfaMethodType = "webauthn"
 )
 

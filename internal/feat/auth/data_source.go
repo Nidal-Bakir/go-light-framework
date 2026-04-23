@@ -9,6 +9,7 @@ import (
 	"github.com/Nidal-Bakir/go-todo-backend/internal/apperr"
 	"github.com/Nidal-Bakir/go-todo-backend/internal/database"
 	"github.com/Nidal-Bakir/go-todo-backend/internal/database/database_queries"
+	"github.com/Nidal-Bakir/go-todo-backend/internal/otp"
 	"github.com/Nidal-Bakir/go-todo-backend/internal/session"
 	"github.com/Nidal-Bakir/go-todo-backend/internal/utils/email"
 	"github.com/Nidal-Bakir/go-todo-backend/internal/utils/phonenumber"
@@ -23,6 +24,11 @@ const (
 	OtpChallengExpirationForMfaVerification = time.Minute * 15
 	ExpirationForForgetPasswordTempData     = time.Minute * 15
 )
+
+type MfaMethodsFilter struct {
+	Status     MfaStatus
+	MethodType MfaMethodType
+}
 
 type DataSource interface {
 	// Query ---
@@ -77,6 +83,7 @@ type DataSource interface {
 	CreateEmailMfa(ctx context.Context, userId int32, email email.Email, ownershipVerificationId uuid.UUID) (id int32, err error)
 	CreatePhoneMfa(ctx context.Context, userId int32, phone phonenumber.PhoneNumber, ownershipVerificationId uuid.UUID) (id int32, err error)
 	GetOwnershipVerificationIdForMfa(ctx context.Context, userId int32, mfaId int32) (uuid.UUID, error)
+	CreateTotpMfa(ctx context.Context, userId int32, encryptedSecretKey string, algorithm otp.TotpAlgorithm, digits otp.TotpDigits, period uint32, issuer string) (id int32, err error)
 
 	MfaUpdateOwnershipVerificationForMfaMethodTypeEmail(ctx context.Context, mfaId int32, ownershipVerificationId uuid.UUID) error
 	MfaUpdateOwnershipVerificationForMfaMethodTypePhone(ctx context.Context, mfaId int32, ownershipVerificationId uuid.UUID) error
@@ -87,9 +94,9 @@ type DataSource interface {
 	ChangeMfaMethodStatus(ctx context.Context, mfaId int32, newStatus MfaStatus) error
 
 	GetMfaMethod(ctx context.Context, userId, mfaId int32) (database_queries.MfaGetMethodRow, error)
+	MfaGetTotpMethod(ctx context.Context, userId, mfaId int32) (database_queries.MfaGetTotpMethodRow, error) 
 	GetActiveMfaMethod(ctx context.Context, userId, mfaId int32) (database_queries.MfaGetMethodRow, error)
-	GetAllMfaMethodsForUser(ctx context.Context, userId int32) ([]database_queries.MfaGetAllMfaMethodsForUserRow, error)
-	MfaGetAllActiveMfaMethodsForUser(ctx context.Context, userId int32) ([]database_queries.MfaGetAllActiveMfaMethodsForUserRow, error)
+	GetAllMfaMethodsForUser(ctx context.Context, userId int32, filter *MfaMethodsFilter) ([]database_queries.MfaGetAllMfaMethodsForUserRow, error)
 
 	StartMfaSession(ctx context.Context, userId int32, purpose MfaSessionPurpose, expiresAt time.Time) (id uuid.UUID, err error)
 	DeleteMfaSession(ctx context.Context, mfaSessionId uuid.UUID) error
@@ -871,16 +878,31 @@ func (ds dataSourceImpl) GetMfaMethod(ctx context.Context, userId, mfaId int32) 
 	return ds.db.Queries.MfaGetMethod(ctx, database_queries.MfaGetMethodParams{ID: mfaId, UserID: userId})
 }
 
+func (ds dataSourceImpl) MfaGetTotpMethod(ctx context.Context, userId, mfaId int32) (database_queries.MfaGetTotpMethodRow, error) {
+	return ds.db.Queries.MfaGetTotpMethod(ctx, database_queries.MfaGetTotpMethodParams{ID: mfaId, UserID: userId})
+}
+
 func (ds dataSourceImpl) GetActiveMfaMethod(ctx context.Context, userId, mfaId int32) (database_queries.MfaGetMethodRow, error) {
 	return ds.db.Queries.MfaGetMethod(ctx, database_queries.MfaGetMethodParams{ID: mfaId, UserID: userId, Status: database.ToPgTypeText(MfaStatusVerified.String())})
 }
 
-func (ds dataSourceImpl) GetAllMfaMethodsForUser(ctx context.Context, userId int32) ([]database_queries.MfaGetAllMfaMethodsForUserRow, error) {
-	return ds.db.Queries.MfaGetAllMfaMethodsForUser(ctx, userId)
-}
-
-func (ds dataSourceImpl) MfaGetAllActiveMfaMethodsForUser(ctx context.Context, userId int32) ([]database_queries.MfaGetAllActiveMfaMethodsForUserRow, error) {
-	return ds.db.Queries.MfaGetAllActiveMfaMethodsForUser(ctx, userId)
+func (ds dataSourceImpl) GetAllMfaMethodsForUser(ctx context.Context, userId int32, filter *MfaMethodsFilter) ([]database_queries.MfaGetAllMfaMethodsForUserRow, error) {
+	if filter == nil {
+		return ds.db.Queries.MfaGetAllMfaMethodsForUser(
+			ctx,
+			database_queries.MfaGetAllMfaMethodsForUserParams{
+				UserID: userId,
+			},
+		)
+	}
+	return ds.db.Queries.MfaGetAllMfaMethodsForUser(
+		ctx,
+		database_queries.MfaGetAllMfaMethodsForUserParams{
+			UserID:     userId,
+			Status:     database.ToPgTypeText(filter.Status.String()),
+			MethodType: database.ToPgTypeText(filter.MethodType.String()),
+		},
+	)
 }
 
 func (ds dataSourceImpl) MfaGetEmailMfaForUser(ctx context.Context, userId int32, email email.Email) (database_queries.MfaGetEmailMfaForUserRow, error) {
@@ -1082,4 +1104,18 @@ func (ds dataSourceImpl) GetOwnershipVerificationIdForMfa(ctx context.Context, u
 	}
 
 	return uuid.Nil, apperr.ErrNoResult
+}
+
+func (ds dataSourceImpl) CreateTotpMfa(ctx context.Context, userId int32, encryptedSecretKey string, algorithm otp.TotpAlgorithm, digits otp.TotpDigits, period uint32, issuer string) (id int32, err error) {
+	return ds.db.Queries.MfaCreateTypeTotp(
+		ctx,
+		database_queries.MfaCreateTypeTotpParams{
+			SecretKey: encryptedSecretKey,
+			Algorithm: algorithm.String(),
+			Digits:    int32(digits.Val()),
+			Period:    int32(period),
+			Issuer:    issuer,
+			UserID:    userId,
+		},
+	)
 }

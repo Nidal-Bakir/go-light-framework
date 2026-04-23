@@ -119,12 +119,7 @@ WITH
     INSERT INTO
       mfa_method (status, method_type, user_id, label)
     VALUES
-      (
-        'pending',
-        'email',
-        $3::INT,
-        $4::TEXT
-      )
+      ('pending', 'email', $3::INT, $4::TEXT)
     RETURNING
       id
   )
@@ -159,12 +154,7 @@ type MfaCreateTypeEmailParams struct {
 //	    INSERT INTO
 //	      mfa_method (status, method_type, user_id, label)
 //	    VALUES
-//	      (
-//	        'pending',
-//	        'email',
-//	        $3::INT,
-//	        $4::TEXT
-//	      )
+//	      ('pending', 'email', $3::INT, $4::TEXT)
 //	    RETURNING
 //	      id
 //	  )
@@ -201,12 +191,7 @@ WITH
     INSERT INTO
       mfa_method (status, method_type, user_id, label)
     VALUES
-      (
-        'pending',
-        'phone',
-        $3::INT,
-        $4::TEXT
-      )
+      ('pending', 'phone', $3::INT, $4::TEXT)
     RETURNING
       id
   )
@@ -241,12 +226,7 @@ type MfaCreateTypePhoneParams struct {
 //	    INSERT INTO
 //	      mfa_method (status, method_type, user_id, label)
 //	    VALUES
-//	      (
-//	        'pending',
-//	        'phone',
-//	        $3::INT,
-//	        $4::TEXT
-//	      )
+//	      ('pending', 'phone', $3::INT, $4::TEXT)
 //	    RETURNING
 //	      id
 //	  )
@@ -269,6 +249,90 @@ func (q *Queries) MfaCreateTypePhone(ctx context.Context, arg MfaCreateTypePhone
 	row := q.db.QueryRow(ctx, mfaCreateTypePhone,
 		arg.OwnershipVerification,
 		arg.Phone,
+		arg.UserID,
+		arg.Label,
+	)
+	var id int32
+	err := row.Scan(&id)
+	return id, err
+}
+
+const mfaCreateTypeTotp = `-- name: MfaCreateTypeTotp :one
+WITH
+  new_mfa_method AS (
+    INSERT INTO
+      mfa_method (status, method_type, user_id, label)
+    VALUES
+      ('pending', 'totp', $6::INT, $7::TEXT)
+    RETURNING
+      id
+  )
+INSERT INTO
+  mfa_method_type_totp (id, secret_key, algorithm, digits, period, issuer)
+VALUES
+  (
+    (
+      SELECT
+        id
+      FROM
+        new_mfa_method
+    ),
+    $1::TEXT,
+    $2::TEXT,
+    $3::INT,
+    $4::INT,
+    $5::TEXT
+  )
+RETURNING
+  id
+`
+
+type MfaCreateTypeTotpParams struct {
+	SecretKey string `json:"secret_key"`
+	Algorithm string `json:"algorithm"`
+	Digits    int32  `json:"digits"`
+	Period    int32  `json:"period"`
+	Issuer    string `json:"issuer"`
+	UserID    int32  `json:"user_id"`
+	Label     string `json:"label"`
+}
+
+// MfaCreateTypeTotp
+//
+//	WITH
+//	  new_mfa_method AS (
+//	    INSERT INTO
+//	      mfa_method (status, method_type, user_id, label)
+//	    VALUES
+//	      ('pending', 'totp', $6::INT, $7::TEXT)
+//	    RETURNING
+//	      id
+//	  )
+//	INSERT INTO
+//	  mfa_method_type_totp (id, secret_key, algorithm, digits, period, issuer)
+//	VALUES
+//	  (
+//	    (
+//	      SELECT
+//	        id
+//	      FROM
+//	        new_mfa_method
+//	    ),
+//	    $1::TEXT,
+//	    $2::TEXT,
+//	    $3::INT,
+//	    $4::INT,
+//	    $5::TEXT
+//	  )
+//	RETURNING
+//	  id
+func (q *Queries) MfaCreateTypeTotp(ctx context.Context, arg MfaCreateTypeTotpParams) (int32, error) {
+	row := q.db.QueryRow(ctx, mfaCreateTypeTotp,
+		arg.SecretKey,
+		arg.Algorithm,
+		arg.Digits,
+		arg.Period,
+		arg.Issuer,
 		arg.UserID,
 		arg.Label,
 	)
@@ -309,91 +373,6 @@ func (q *Queries) MfaDeleteMfaSession(ctx context.Context, id uuid.UUID) error {
 	return err
 }
 
-const mfaGetAllActiveMfaMethodsForUser = `-- name: MfaGetAllActiveMfaMethodsForUser :many
-SELECT
-  m.id AS id,
-  m.status AS status,
-  m.method_type AS method_type,
-  m.user_id AS user_id,
-  m.label AS label,
-  e.email AS method_email_email,
-  p.phone AS method_phone_phone,
-  t.algorithm AS method_totp_algorithm,
-  h.algorithm AS method_hotp_algorithm
-FROM
-  mfa_method AS m
-  LEFT JOIN mfa_method_type_email AS e ON e.id = m.id
-  LEFT JOIN mfa_method_type_phone AS p ON p.id = m.id
-  LEFT JOIN mfa_method_type_totp AS t ON t.id = m.id
-  LEFT JOIN mfa_method_type_hotp AS h ON h.id = m.id
-WHERE
-  m.user_id = $1::INT
-  AND m.status = 'verified'
-`
-
-type MfaGetAllActiveMfaMethodsForUserRow struct {
-	ID                  int32       `json:"id"`
-	Status              string      `json:"status"`
-	MethodType          string      `json:"method_type"`
-	UserID              int32       `json:"user_id"`
-	Label               string      `json:"label"`
-	MethodEmailEmail    pgtype.Text `json:"method_email_email"`
-	MethodPhonePhone    pgtype.Text `json:"method_phone_phone"`
-	MethodTotpAlgorithm pgtype.Text `json:"method_totp_algorithm"`
-	MethodHotpAlgorithm pgtype.Text `json:"method_hotp_algorithm"`
-}
-
-// MfaGetAllActiveMfaMethodsForUser
-//
-//	SELECT
-//	  m.id AS id,
-//	  m.status AS status,
-//	  m.method_type AS method_type,
-//	  m.user_id AS user_id,
-//	  m.label AS label,
-//	  e.email AS method_email_email,
-//	  p.phone AS method_phone_phone,
-//	  t.algorithm AS method_totp_algorithm,
-//	  h.algorithm AS method_hotp_algorithm
-//	FROM
-//	  mfa_method AS m
-//	  LEFT JOIN mfa_method_type_email AS e ON e.id = m.id
-//	  LEFT JOIN mfa_method_type_phone AS p ON p.id = m.id
-//	  LEFT JOIN mfa_method_type_totp AS t ON t.id = m.id
-//	  LEFT JOIN mfa_method_type_hotp AS h ON h.id = m.id
-//	WHERE
-//	  m.user_id = $1::INT
-//	  AND m.status = 'verified'
-func (q *Queries) MfaGetAllActiveMfaMethodsForUser(ctx context.Context, userID int32) ([]MfaGetAllActiveMfaMethodsForUserRow, error) {
-	rows, err := q.db.Query(ctx, mfaGetAllActiveMfaMethodsForUser, userID)
-	if err != nil {
-		return nil, err
-	}
-	defer rows.Close()
-	items := []MfaGetAllActiveMfaMethodsForUserRow{}
-	for rows.Next() {
-		var i MfaGetAllActiveMfaMethodsForUserRow
-		if err := rows.Scan(
-			&i.ID,
-			&i.Status,
-			&i.MethodType,
-			&i.UserID,
-			&i.Label,
-			&i.MethodEmailEmail,
-			&i.MethodPhonePhone,
-			&i.MethodTotpAlgorithm,
-			&i.MethodHotpAlgorithm,
-		); err != nil {
-			return nil, err
-		}
-		items = append(items, i)
-	}
-	if err := rows.Err(); err != nil {
-		return nil, err
-	}
-	return items, nil
-}
-
 const mfaGetAllMfaMethodsForUser = `-- name: MfaGetAllMfaMethodsForUser :many
 SELECT
   m.id AS id,
@@ -403,17 +382,29 @@ SELECT
   m.label AS label,
   e.email AS method_email_email,
   p.phone AS method_phone_phone,
-  t.algorithm AS method_totp_algorithm,
-  h.algorithm AS method_hotp_algorithm
+  t.algorithm AS method_totp_algorithm
 FROM
   mfa_method AS m
   LEFT JOIN mfa_method_type_email AS e ON e.id = m.id
   LEFT JOIN mfa_method_type_phone AS p ON p.id = m.id
   LEFT JOIN mfa_method_type_totp AS t ON t.id = m.id
-  LEFT JOIN mfa_method_type_hotp AS h ON h.id = m.id
 WHERE
   m.user_id = $1::INT
+  AND (
+    $2::TEXT IS NULL
+    OR m.method_type = $2::TEXT
+  )
+  AND (
+    $3::TEXT IS NULL
+    OR m.status = $3::TEXT
+  )
 `
+
+type MfaGetAllMfaMethodsForUserParams struct {
+	UserID     int32       `json:"user_id"`
+	MethodType pgtype.Text `json:"method_type"`
+	Status     pgtype.Text `json:"status"`
+}
 
 type MfaGetAllMfaMethodsForUserRow struct {
 	ID                  int32       `json:"id"`
@@ -424,7 +415,6 @@ type MfaGetAllMfaMethodsForUserRow struct {
 	MethodEmailEmail    pgtype.Text `json:"method_email_email"`
 	MethodPhonePhone    pgtype.Text `json:"method_phone_phone"`
 	MethodTotpAlgorithm pgtype.Text `json:"method_totp_algorithm"`
-	MethodHotpAlgorithm pgtype.Text `json:"method_hotp_algorithm"`
 }
 
 // MfaGetAllMfaMethodsForUser
@@ -437,18 +427,24 @@ type MfaGetAllMfaMethodsForUserRow struct {
 //	  m.label AS label,
 //	  e.email AS method_email_email,
 //	  p.phone AS method_phone_phone,
-//	  t.algorithm AS method_totp_algorithm,
-//	  h.algorithm AS method_hotp_algorithm
+//	  t.algorithm AS method_totp_algorithm
 //	FROM
 //	  mfa_method AS m
 //	  LEFT JOIN mfa_method_type_email AS e ON e.id = m.id
 //	  LEFT JOIN mfa_method_type_phone AS p ON p.id = m.id
 //	  LEFT JOIN mfa_method_type_totp AS t ON t.id = m.id
-//	  LEFT JOIN mfa_method_type_hotp AS h ON h.id = m.id
 //	WHERE
 //	  m.user_id = $1::INT
-func (q *Queries) MfaGetAllMfaMethodsForUser(ctx context.Context, userID int32) ([]MfaGetAllMfaMethodsForUserRow, error) {
-	rows, err := q.db.Query(ctx, mfaGetAllMfaMethodsForUser, userID)
+//	  AND (
+//	    $2::TEXT IS NULL
+//	    OR m.method_type = $2::TEXT
+//	  )
+//	  AND (
+//	    $3::TEXT IS NULL
+//	    OR m.status = $3::TEXT
+//	  )
+func (q *Queries) MfaGetAllMfaMethodsForUser(ctx context.Context, arg MfaGetAllMfaMethodsForUserParams) ([]MfaGetAllMfaMethodsForUserRow, error) {
+	rows, err := q.db.Query(ctx, mfaGetAllMfaMethodsForUser, arg.UserID, arg.MethodType, arg.Status)
 	if err != nil {
 		return nil, err
 	}
@@ -465,7 +461,6 @@ func (q *Queries) MfaGetAllMfaMethodsForUser(ctx context.Context, userID int32) 
 			&i.MethodEmailEmail,
 			&i.MethodPhonePhone,
 			&i.MethodTotpAlgorithm,
-			&i.MethodHotpAlgorithm,
 		); err != nil {
 			return nil, err
 		}
@@ -569,26 +564,26 @@ SELECT
   m.label AS label,
   e.email AS method_email_email,
   p.phone AS method_phone_phone,
-  t.algorithm AS method_totp_algorithm,
-  h.algorithm AS method_hotp_algorithm
+  t.algorithm AS method_totp_algorithm
 FROM
   mfa_method AS m
   LEFT JOIN mfa_method_type_email AS e ON m.id = e.id
   LEFT JOIN mfa_method_type_phone AS p ON m.id = p.id
   LEFT JOIN mfa_method_type_totp AS t ON m.id = t.id
-  LEFT JOIN mfa_method_type_hotp AS h ON m.id = h.id
 WHERE
-  m.id = $1::INT
-  AND m.user_id = $2::INT
+  m.user_id = $1::INT
+  AND m.id = $2::INT
   AND (
     $3::TEXT IS NULL
     OR m.status = $3::TEXT
   )
+LIMIT
+  1
 `
 
 type MfaGetMethodParams struct {
-	ID     int32       `json:"id"`
 	UserID int32       `json:"user_id"`
+	ID     int32       `json:"id"`
 	Status pgtype.Text `json:"status"`
 }
 
@@ -601,7 +596,6 @@ type MfaGetMethodRow struct {
 	MethodEmailEmail    pgtype.Text `json:"method_email_email"`
 	MethodPhonePhone    pgtype.Text `json:"method_phone_phone"`
 	MethodTotpAlgorithm pgtype.Text `json:"method_totp_algorithm"`
-	MethodHotpAlgorithm pgtype.Text `json:"method_hotp_algorithm"`
 }
 
 // MfaGetMethod
@@ -614,23 +608,23 @@ type MfaGetMethodRow struct {
 //	  m.label AS label,
 //	  e.email AS method_email_email,
 //	  p.phone AS method_phone_phone,
-//	  t.algorithm AS method_totp_algorithm,
-//	  h.algorithm AS method_hotp_algorithm
+//	  t.algorithm AS method_totp_algorithm
 //	FROM
 //	  mfa_method AS m
 //	  LEFT JOIN mfa_method_type_email AS e ON m.id = e.id
 //	  LEFT JOIN mfa_method_type_phone AS p ON m.id = p.id
 //	  LEFT JOIN mfa_method_type_totp AS t ON m.id = t.id
-//	  LEFT JOIN mfa_method_type_hotp AS h ON m.id = h.id
 //	WHERE
-//	  m.id = $1::INT
-//	  AND m.user_id = $2::INT
+//	  m.user_id = $1::INT
+//	  AND m.id = $2::INT
 //	  AND (
 //	    $3::TEXT IS NULL
 //	    OR m.status = $3::TEXT
 //	  )
+//	LIMIT
+//	  1
 func (q *Queries) MfaGetMethod(ctx context.Context, arg MfaGetMethodParams) (MfaGetMethodRow, error) {
-	row := q.db.QueryRow(ctx, mfaGetMethod, arg.ID, arg.UserID, arg.Status)
+	row := q.db.QueryRow(ctx, mfaGetMethod, arg.UserID, arg.ID, arg.Status)
 	var i MfaGetMethodRow
 	err := row.Scan(
 		&i.ID,
@@ -641,7 +635,6 @@ func (q *Queries) MfaGetMethod(ctx context.Context, arg MfaGetMethodParams) (Mfa
 		&i.MethodEmailEmail,
 		&i.MethodPhonePhone,
 		&i.MethodTotpAlgorithm,
-		&i.MethodHotpAlgorithm,
 	)
 	return i, err
 }
@@ -1005,6 +998,96 @@ func (q *Queries) MfaGetRememberedDevices(ctx context.Context, userID int32) ([]
 		return nil, err
 	}
 	return items, nil
+}
+
+const mfaGetTotpMethod = `-- name: MfaGetTotpMethod :one
+SELECT
+  m.id AS id,
+  m.status AS status,
+  m.method_type AS method_type,
+  m.user_id AS user_id,
+  m.label AS label,
+  t.secret_key AS method_totp_secret_key,
+  t.algorithm AS method_totp_algorithm,
+  t.digits AS method_totp_digits,
+  t.period AS method_totp_period,
+  t.issuer AS method_totp_issuer
+FROM
+  mfa_method AS m
+  LEFT JOIN mfa_method_type_totp AS t ON m.id = t.id
+WHERE
+  m.user_id = $1::INT
+  AND m.id = $2::INT
+  AND m.method_type = 'totp'
+  AND (
+    $3::TEXT IS NULL
+    OR m.status = $3::TEXT
+  )
+LIMIT
+  1
+`
+
+type MfaGetTotpMethodParams struct {
+	UserID int32       `json:"user_id"`
+	ID     int32       `json:"id"`
+	Status pgtype.Text `json:"status"`
+}
+
+type MfaGetTotpMethodRow struct {
+	ID                  int32       `json:"id"`
+	Status              string      `json:"status"`
+	MethodType          string      `json:"method_type"`
+	UserID              int32       `json:"user_id"`
+	Label               string      `json:"label"`
+	MethodTotpSecretKey pgtype.Text `json:"method_totp_secret_key"`
+	MethodTotpAlgorithm pgtype.Text `json:"method_totp_algorithm"`
+	MethodTotpDigits    pgtype.Int4 `json:"method_totp_digits"`
+	MethodTotpPeriod    pgtype.Int4 `json:"method_totp_period"`
+	MethodTotpIssuer    pgtype.Text `json:"method_totp_issuer"`
+}
+
+// MfaGetTotpMethod
+//
+//	SELECT
+//	  m.id AS id,
+//	  m.status AS status,
+//	  m.method_type AS method_type,
+//	  m.user_id AS user_id,
+//	  m.label AS label,
+//	  t.secret_key AS method_totp_secret_key,
+//	  t.algorithm AS method_totp_algorithm,
+//	  t.digits AS method_totp_digits,
+//	  t.period AS method_totp_period,
+//	  t.issuer AS method_totp_issuer
+//	FROM
+//	  mfa_method AS m
+//	  LEFT JOIN mfa_method_type_totp AS t ON m.id = t.id
+//	WHERE
+//	  m.user_id = $1::INT
+//	  AND m.id = $2::INT
+//	  AND m.method_type = 'totp'
+//	  AND (
+//	    $3::TEXT IS NULL
+//	    OR m.status = $3::TEXT
+//	  )
+//	LIMIT
+//	  1
+func (q *Queries) MfaGetTotpMethod(ctx context.Context, arg MfaGetTotpMethodParams) (MfaGetTotpMethodRow, error) {
+	row := q.db.QueryRow(ctx, mfaGetTotpMethod, arg.UserID, arg.ID, arg.Status)
+	var i MfaGetTotpMethodRow
+	err := row.Scan(
+		&i.ID,
+		&i.Status,
+		&i.MethodType,
+		&i.UserID,
+		&i.Label,
+		&i.MethodTotpSecretKey,
+		&i.MethodTotpAlgorithm,
+		&i.MethodTotpDigits,
+		&i.MethodTotpPeriod,
+		&i.MethodTotpIssuer,
+	)
+	return i, err
 }
 
 type MfaInsertBackupCodesParams struct {

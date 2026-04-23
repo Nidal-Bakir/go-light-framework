@@ -13,6 +13,8 @@ import (
 
 type OtpChannel string
 type OtpPurpose string
+type TotpAlgorithm string
+type TotpDigits uint8
 
 const (
 	EmailChannel OtpChannel = "email"
@@ -24,6 +26,14 @@ const (
 	MfaPhoneVerification OtpPurpose = "mfa_phone_verification"
 	MfaEmailOtp          OtpPurpose = "mfa_email_otp"
 	MfaPhoneOtp          OtpPurpose = "mfa_phone_otp"
+
+	SHA1   TotpAlgorithm = "SHA-1" // default
+	SHA256 TotpAlgorithm = "SHA-256"
+	SHA512 TotpAlgorithm = "SHA-512"
+	MD5    TotpAlgorithm = "MD5"
+
+	DigitsSix   TotpDigits = 6 // default
+	DigitsEight TotpDigits = 8
 )
 
 func (c OtpChannel) String() string {
@@ -32,6 +42,14 @@ func (c OtpChannel) String() string {
 
 func (o OtpPurpose) String() string {
 	return string(o)
+}
+
+func (a TotpAlgorithm) String() string {
+	return string(a)
+}
+
+func (a TotpDigits) Val() uint {
+	return uint(a)
 }
 
 func (l *OtpPurpose) FromString(str string) (*OtpPurpose, error) {
