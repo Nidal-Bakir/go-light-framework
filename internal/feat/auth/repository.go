@@ -68,7 +68,7 @@ type Repository interface {
 	CreatePhoneMfa(ctx context.Context, userId int32, phone phonenumber.PhoneNumber) (id int32, err error)
 	VerifyMfaOwnership(ctx context.Context, userId int32, mfaId int32, otpCode string) error
 
-	EnrollUserInTotpMfa(ctx context.Context, userAndSession UserAndSession) (id int32, err error)
+	EnrollUserInTotpMfa(ctx context.Context, userAndSession UserAndSession) (id int32, secretKey string, qrUrl string, err error)
 	ValidateTotpEnrollment(ctx context.Context, userId int32, totpCode string, id int32) error
 
 	GetAllMfaMethodsForUser(ctx context.Context, userId int) ([]database_queries.MfaGetAllMfaMethodsForUserRow, error)
@@ -1027,16 +1027,25 @@ func (repo repositoryImpl) VerifyPendingOtpMfa(
 		zlog.Err(err).Msg("error can not get the mfa session from the token")
 		return nil, "", err
 	}
-	if !result.OtpChallenge.Valid {
-		return nil, "", apperr.ErrNoResult
-	}
 
-	err = repo.checkOtp(ctx, result.OtpChallenge.Bytes, otpCode)
-	if err != nil {
-		if !errors.Is(err, apperr.ErrInvalidOtpCode) {
-			zlog.Err(err).Msg("error while checking the otp")
+	if result.MethodType == MfaMethodTypeEmail.String() || result.MethodType == MfaMethodTypePhone.String() {
+		if !result.OtpChallenge.Valid {
+			return nil, "", apperr.ErrNoResult
 		}
-		return nil, "", err
+		err = repo.checkOtp(ctx, result.OtpChallenge.Bytes, otpCode)
+		if err != nil {
+			if !errors.Is(err, apperr.ErrInvalidOtpCode) {
+				zlog.Err(err).Msg("error while checking the otp")
+			}
+			return nil, "", err
+		}
+	} else if result.MethodType == MfaMethodTypeTotp.String() {
+		isValid := otp.ValidateTotp(otpCode, result.TotpSecretKey.String)
+		if !isValid {
+			return nil, "", apperr.ErrInvalidOtpCode
+		}
+	} else {
+		panic("unsupported mfa method type")
 	}
 
 	err = repo.dataSource.DeleteMfaSession(ctx, mfaSessionId)
@@ -1202,27 +1211,27 @@ func (repo repositoryImpl) AddPendingMfaSession(ctx context.Context, sessionToke
 	return nil
 }
 
-func (repo repositoryImpl) EnrollUserInTotpMfa(ctx context.Context, userAndSession UserAndSession) (id int32, err error) {
+func (repo repositoryImpl) EnrollUserInTotpMfa(ctx context.Context, userAndSession UserAndSession) (id int32, secretKey string, qrUrl string, err error) {
 	zlog := zerolog.Ctx(ctx)
 
 	result, err := repo.dataSource.GetAllMfaMethodsForUser(ctx, userAndSession.UserID, &MfaMethodsFilter{MethodType: MfaMethodTypeTotp})
 	if err != nil {
 		zlog.Err(err).Msg("error can not get all the active mfa methods for a user")
-		return -1, err
+		return -1, "", "", err
 	}
 	if len(result) != 0 {
-		return -1, fmt.Errorf("can not have more then one totp method at the time")
+		return -1, "", "", fmt.Errorf("can not have more then one totp method at the time")
 	}
 
 	key, err := otp.NewTotpKey(userAndSession.UserUsername, os.Getenv("APP_NAME"))
 	if err != nil {
 		zlog.Err(err).Msg("error can not add pending mfa session")
-		return -1, err
+		return -1, "", "", err
 	}
 	encryptedSecretKey, err := key.EncryptedSecretKey()
 	if err != nil {
 		zlog.Err(err).Msg("error can not encrypt the secret totp key")
-		return -1, err
+		return -1, "", "", err
 	}
 
 	id, err = repo.dataSource.CreateTotpMfa(
@@ -1236,9 +1245,10 @@ func (repo repositoryImpl) EnrollUserInTotpMfa(ctx context.Context, userAndSessi
 	)
 	if err != nil {
 		zlog.Err(err).Msg("error can not create totp mfa method")
-		return -1, err
+		return -1, "", "", err
 	}
-	return id, err
+
+	return id, key.SecretKey(), key.URL(), nil
 }
 
 func (repo repositoryImpl) ValidateTotpEnrollment(ctx context.Context, userId int32, totpCode string, mfaId int32) error {

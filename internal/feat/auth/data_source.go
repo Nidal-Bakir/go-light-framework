@@ -94,14 +94,14 @@ type DataSource interface {
 	ChangeMfaMethodStatus(ctx context.Context, mfaId int32, newStatus MfaStatus) error
 
 	GetMfaMethod(ctx context.Context, userId, mfaId int32) (database_queries.MfaGetMethodRow, error)
-	MfaGetTotpMethod(ctx context.Context, userId, mfaId int32) (database_queries.MfaGetTotpMethodRow, error) 
+	MfaGetTotpMethod(ctx context.Context, userId, mfaId int32) (database_queries.MfaGetTotpMethodRow, error)
 	GetActiveMfaMethod(ctx context.Context, userId, mfaId int32) (database_queries.MfaGetMethodRow, error)
 	GetAllMfaMethodsForUser(ctx context.Context, userId int32, filter *MfaMethodsFilter) ([]database_queries.MfaGetAllMfaMethodsForUserRow, error)
 
 	StartMfaSession(ctx context.Context, userId int32, purpose MfaSessionPurpose, expiresAt time.Time) (id uuid.UUID, err error)
 	DeleteMfaSession(ctx context.Context, mfaSessionId uuid.UUID) error
 	AddPendingMfaSession(ctx context.Context, mfaSessionId uuid.UUID, mfaMethodId int32, expiresAt time.Time, otpChallengeId uuid.UUID) error
-	GetPendingMfaSession(ctx context.Context, mfaSessionId uuid.UUID, mfaMethodId int32) (database_queries.PendingMfaSession, error)
+	GetPendingMfaSession(ctx context.Context, mfaSessionId uuid.UUID, mfaMethodId int32) (database_queries.MfaGetPendingMfaSessionRow, error)
 	SetOtpChallengeForPendingMfa(ctx context.Context, mfaSessionId uuid.UUID, mfaMethodId int32, otpChallenge uuid.UUID) error
 	GetPendingMfaSessionWithOtpChallengeData(ctx context.Context, mfaSessionId uuid.UUID, mfaMethodId int32) (database_queries.MfaGetPendingMfaSessionWithOtpChallengeRow, error)
 
@@ -958,7 +958,7 @@ func (ds dataSourceImpl) AddPendingMfaSession(ctx context.Context, mfaSessionId 
 	)
 }
 
-func (ds dataSourceImpl) GetPendingMfaSession(ctx context.Context, mfaSessionId uuid.UUID, mfaMethodId int32) (database_queries.PendingMfaSession, error) {
+func (ds dataSourceImpl) GetPendingMfaSession(ctx context.Context, mfaSessionId uuid.UUID, mfaMethodId int32) (database_queries.MfaGetPendingMfaSessionRow, error) {
 	return ds.db.Queries.MfaGetPendingMfaSession(
 		ctx,
 		database_queries.MfaGetPendingMfaSessionParams{

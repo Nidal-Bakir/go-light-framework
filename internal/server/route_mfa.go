@@ -26,6 +26,22 @@ func mfaRouter(ctx context.Context, s *Server, authRepo auth.Repository) http.Ha
 	)
 
 	mux.HandleFunc(
+		"POST /register-totp",
+		middleware.MiddlewareChain(
+			mfaRegisterTotp(authRepo),
+			Auth(authRepo),
+		),
+	)
+
+	mux.HandleFunc(
+		"POST /validate-totp",
+		middleware.MiddlewareChain(
+			mfaValidateTotp(authRepo),
+			Auth(authRepo),
+		),
+	)
+
+	mux.HandleFunc(
 		"POST /verify-ownership",
 		middleware.MiddlewareChain(
 			mfaVerifyOwnership(authRepo),
@@ -132,6 +148,88 @@ func validateMfaRegisterOtpParam(r *http.Request) (mfaRegisterOtpParams, []error
 		errList = append(errList, apperr.ErrInvalidPhoneNumber)
 	}
 	params.Phone = phone
+	return params, errList
+}
+
+// -----------------------------------------------------------------------------------
+
+func mfaRegisterTotp(authRepo auth.Repository) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		ctx := r.Context()
+		userAndSession := auth.MustUserAndSessionFromContext(ctx)
+
+		id, secretKey, qrUrl, err := authRepo.EnrollUserInTotpMfa(ctx, userAndSession)
+		if err != nil {
+			writeError(ctx, w, r, return400IfApp404IfNoResultErrOr500(err), err)
+			return
+		}
+
+		response := struct {
+			Id        int32  `json:"id"`
+			SecretKey string `json:"secret_key"`
+			QrUrl     string `json:"qr_url"`
+		}{
+			Id:        id,
+			SecretKey: secretKey,
+			QrUrl:     qrUrl,
+		}
+		writeResponse(ctx, w, r, http.StatusCreated, response)
+	}
+}
+
+// -----------------------------------------------------------------------------------
+
+type mfaValidateTotpParams struct {
+	totpCode string
+	mfaId    int32
+}
+
+func mfaValidateTotp(authRepo auth.Repository) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		ctx := r.Context()
+
+		err := r.ParseForm()
+		if err != nil {
+			writeError(ctx, w, r, http.StatusBadRequest, err)
+			return
+		}
+
+		params, errList := validateValidateTotpEnrollmentParams(r)
+		if len(errList) != 0 {
+			writeError(ctx, w, r, http.StatusBadRequest, errList...)
+			return
+		}
+
+		userAndSession := auth.MustUserAndSessionFromContext(ctx)
+
+		err = authRepo.ValidateTotpEnrollment(ctx, userAndSession.UserID, params.totpCode, params.mfaId)
+		if err != nil {
+			writeError(ctx, w, r, http.StatusBadRequest, err)
+			return
+		}
+
+		apiWriteOperationDoneSuccessfullyJson(ctx, w, r)
+	}
+}
+
+func validateValidateTotpEnrollmentParams(r *http.Request) (mfaValidateTotpParams, []error) {
+	params := mfaValidateTotpParams{}
+	errList := make([]error, 0, 2)
+
+	MfaIdStr := r.FormValue("mfa_id")
+	otp := r.FormValue("totp_code")
+
+	mfaId, err := strconv.Atoi(MfaIdStr)
+	if err != nil {
+		errList = append(errList, apperr.ErrInvalidId)
+	}
+	if len(otp) != auth.OtpCodeLength {
+		errList = append(errList, apperr.ErrInvalidOtpCode)
+	}
+
+	params.mfaId = int32(mfaId)
+	params.totpCode = otp
+
 	return params, errList
 }
 

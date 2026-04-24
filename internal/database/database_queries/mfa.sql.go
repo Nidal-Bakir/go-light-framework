@@ -692,12 +692,20 @@ func (q *Queries) MfaGetOwnershipVerificationId(ctx context.Context, arg MfaGetO
 
 const mfaGetPendingMfaSession = `-- name: MfaGetPendingMfaSession :one
 SELECT
-  mfa_session, mfa_method, otp_challenge, expires_at, created_at, updated_at
+  p.mfa_session,
+  p.mfa_method,
+  p.otp_challenge,
+  m.status,
+  m.method_type,
+  t.secret_key AS totp_secret_key
 from
-  pending_mfa_session
+  pending_mfa_session AS p
+  JOIN mfa_method AS m ON m.id = p.mfa_method
+  LEFT JOIN mfa_method_type_totp AS t ON t.id = m.id
 WHERE
-  mfa_session = $1::UUID
-  AND mfa_method = $2::INTEGER
+  p.mfa_session = $1::UUID
+  AND p.mfa_method = $2::INTEGER
+  AND p.expires_at > NOW()
 LIMIT
   1
 `
@@ -707,37 +715,54 @@ type MfaGetPendingMfaSessionParams struct {
 	MfaMethod  int32     `json:"mfa_method"`
 }
 
+type MfaGetPendingMfaSessionRow struct {
+	MfaSession    uuid.UUID   `json:"mfa_session"`
+	MfaMethod     int32       `json:"mfa_method"`
+	OtpChallenge  pgtype.UUID `json:"otp_challenge"`
+	Status        string      `json:"status"`
+	MethodType    string      `json:"method_type"`
+	TotpSecretKey pgtype.Text `json:"totp_secret_key"`
+}
+
 // MfaGetPendingMfaSession
 //
 //	SELECT
-//	  mfa_session, mfa_method, otp_challenge, expires_at, created_at, updated_at
+//	  p.mfa_session,
+//	  p.mfa_method,
+//	  p.otp_challenge,
+//	  m.status,
+//	  m.method_type,
+//	  t.secret_key AS totp_secret_key
 //	from
-//	  pending_mfa_session
+//	  pending_mfa_session AS p
+//	  JOIN mfa_method AS m ON m.id = p.mfa_method
+//	  LEFT JOIN mfa_method_type_totp AS t ON t.id = m.id
 //	WHERE
-//	  mfa_session = $1::UUID
-//	  AND mfa_method = $2::INTEGER
+//	  p.mfa_session = $1::UUID
+//	  AND p.mfa_method = $2::INTEGER
+//	  AND p.expires_at > NOW()
 //	LIMIT
 //	  1
-func (q *Queries) MfaGetPendingMfaSession(ctx context.Context, arg MfaGetPendingMfaSessionParams) (PendingMfaSession, error) {
+func (q *Queries) MfaGetPendingMfaSession(ctx context.Context, arg MfaGetPendingMfaSessionParams) (MfaGetPendingMfaSessionRow, error) {
 	row := q.db.QueryRow(ctx, mfaGetPendingMfaSession, arg.MfaSession, arg.MfaMethod)
-	var i PendingMfaSession
+	var i MfaGetPendingMfaSessionRow
 	err := row.Scan(
 		&i.MfaSession,
 		&i.MfaMethod,
 		&i.OtpChallenge,
-		&i.ExpiresAt,
-		&i.CreatedAt,
-		&i.UpdatedAt,
+		&i.Status,
+		&i.MethodType,
+		&i.TotpSecretKey,
 	)
 	return i, err
 }
 
 const mfaGetPendingMfaSessionWithOtpChallenge = `-- name: MfaGetPendingMfaSessionWithOtpChallenge :one
 SELECT
-  p.mfa_session mfa_session,
-  p.mfa_method mfa_method,
-  p.expires_at pending_mfa_session_expires_at,
-  p.created_at pending_mfa_session_created_at,
+  p.mfa_session,
+  p.mfa_method,
+  p.expires_at AS pending_mfa_session_expires_at,
+  p.created_at AS pending_mfa_session_created_at,
   p.updated_at AS pending_mfa_session_updated_at,
   o.id AS otp_challenge_id,
   o.otp_hash AS otp_challenge_otp_hash,
@@ -782,10 +807,10 @@ type MfaGetPendingMfaSessionWithOtpChallengeRow struct {
 // MfaGetPendingMfaSessionWithOtpChallenge
 //
 //	SELECT
-//	  p.mfa_session mfa_session,
-//	  p.mfa_method mfa_method,
-//	  p.expires_at pending_mfa_session_expires_at,
-//	  p.created_at pending_mfa_session_created_at,
+//	  p.mfa_session,
+//	  p.mfa_method,
+//	  p.expires_at AS pending_mfa_session_expires_at,
+//	  p.created_at AS pending_mfa_session_created_at,
 //	  p.updated_at AS pending_mfa_session_updated_at,
 //	  o.id AS otp_challenge_id,
 //	  o.otp_hash AS otp_challenge_otp_hash,

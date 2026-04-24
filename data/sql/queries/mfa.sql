@@ -159,12 +159,12 @@ WHERE
   m.user_id = @user_id::INT
   AND m.id = @id::INT
   AND (
-    sqlc.narg(status)::TEXT IS NULL
+    sqlc.narg (status)::TEXT IS NULL
     OR m.status = @status::TEXT
   )
 LIMIT
   1;
-  
+
 -- name: MfaGetTotpMethod :one
 SELECT
   m.id AS id,
@@ -185,7 +185,7 @@ WHERE
   AND m.id = @id::INT
   AND m.method_type = 'totp'
   AND (
-    sqlc.narg(status)::TEXT IS NULL
+    sqlc.narg (status)::TEXT IS NULL
     OR m.status = @status::TEXT
   )
 LIMIT
@@ -209,11 +209,11 @@ FROM
 WHERE
   m.user_id = @user_id::INT
   AND (
-    sqlc.narg(method_type)::TEXT IS NULL
+    sqlc.narg (method_type)::TEXT IS NULL
     OR m.method_type = @method_type::TEXT
   )
   AND (
-    sqlc.narg(status)::TEXT IS NULL
+    sqlc.narg (status)::TEXT IS NULL
     OR m.status = @status::TEXT
   );
 
@@ -251,18 +251,26 @@ VALUES
   (
     @mfa_session::UUID,
     @mfa_method::INT,
-    sqlc.narg(otp_challenge)::UUID,
+    sqlc.narg (otp_challenge)::UUID,
     @expires_at::TIMESTAMPTZ
   );
 
 -- name: MfaGetPendingMfaSession :one
 SELECT
-  *
+  p.mfa_session,
+  p.mfa_method,
+  p.otp_challenge,
+  m.status,
+  m.method_type,
+  t.secret_key AS totp_secret_key
 from
-  pending_mfa_session
+  pending_mfa_session AS p
+  JOIN mfa_method AS m ON m.id = p.mfa_method
+  LEFT JOIN mfa_method_type_totp AS t ON t.id = m.id
 WHERE
-  mfa_session = @mfa_session::UUID
-  AND mfa_method = @mfa_method::INTEGER
+  p.mfa_session = @mfa_session::UUID
+  AND p.mfa_method = @mfa_method::INTEGER
+  AND p.expires_at > NOW()
 LIMIT
   1;
 
@@ -276,10 +284,10 @@ WHERE
 
 -- name: MfaGetPendingMfaSessionWithOtpChallenge :one
 SELECT
-  p.mfa_session mfa_session,
-  p.mfa_method mfa_method,
-  p.expires_at pending_mfa_session_expires_at,
-  p.created_at pending_mfa_session_created_at,
+  p.mfa_session,
+  p.mfa_method,
+  p.expires_at AS pending_mfa_session_expires_at,
+  p.created_at AS pending_mfa_session_created_at,
   p.updated_at AS pending_mfa_session_updated_at,
   o.id AS otp_challenge_id,
   o.otp_hash AS otp_challenge_otp_hash,

@@ -79,8 +79,8 @@ func (k *TotpKey) Digits() TotpDigits {
 	}
 }
 
-func (k *TotpKey) Image(width int, height int) (image.Image, error) {
-	return k.key.Image(width, height)
+func (k *TotpKey) Image(dimension int) (image.Image, error) {
+	return k.key.Image(dimension, dimension)
 }
 
 func (k *TotpKey) Issuer() string {
