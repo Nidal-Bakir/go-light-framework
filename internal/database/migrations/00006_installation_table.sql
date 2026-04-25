@@ -1,34 +1,35 @@
 -- +goose Up
 CREATE TABLE installation (
-    id SERIAL PRIMARY KEY NOT NULL,
-    installation_token VARCHAR(2048) UNIQUE NOT NULL,
-    notification_token VARCHAR(2048),
-    locale VARCHAR(16) NOT NULL CHECK (char_length (locale) >= 2),
-    timezone_offset_in_minutes INTEGER NOT NULL CHECK (timezone_offset_in_minutes BETWEEN -720 AND 840),
-    device_manufacturer VARCHAR(50) NULL,
-    device_os VARCHAR(50) NOT NULL,
-    client_type VARCHAR(50) NOT NULL,
-    device_os_version VARCHAR(50) NULL,
-    app_version VARCHAR(50) NOT NULL,
-    created_at TIMESTAMPTZ DEFAULT NOW() NOT NULL,
-    updated_at TIMESTAMPTZ DEFAULT NOW() NOT NULL,
-    deleted_at TIMESTAMPTZ,
-    attach_to BIGINT REFERENCES session(id) ON DELETE SET NULL,
-    last_attach_to BIGINT REFERENCES session(id) ON DELETE SET NULL
+  id SERIAL PRIMARY KEY NOT NULL,
+  installation_token VARCHAR(2048) UNIQUE NOT NULL,
+  notification_token VARCHAR(2048),
+  locale VARCHAR(16) NOT NULL CHECK (char_length(locale) >= 2),
+  timezone_offset_in_minutes INTEGER NOT NULL CHECK (timezone_offset_in_minutes BETWEEN -720 AND 840),
+  device_manufacturer VARCHAR(50) NULL,
+  device_os VARCHAR(50) NOT NULL,
+  client_type VARCHAR(50) NOT NULL,
+  device_os_version VARCHAR(50) NULL,
+  app_version VARCHAR(50) NOT NULL,
+  created_at TIMESTAMPTZ DEFAULT NOW() NOT NULL,
+  updated_at TIMESTAMPTZ DEFAULT NOW() NOT NULL,
+  deleted_at TIMESTAMPTZ,
+  attach_to BIGINT REFERENCES session (id) ON DELETE SET NULL,
+  last_attach_to BIGINT REFERENCES session (id) ON DELETE SET NULL
 );
 
 CREATE TRIGGER update_installation_updated_at_column BEFORE
-UPDATE ON installation FOR EACH ROW EXECUTE PROCEDURE trigger_set_updated_at_column ();
+UPDATE ON installation FOR EACH ROW
+EXECUTE PROCEDURE trigger_set_updated_at_column ();
 
 CREATE VIEW not_deleted_installation AS
 SELECT
-    *
+  *
 FROM
-    installation
+  installation
 WHERE
-    deleted_at IS NULL;
-
+  deleted_at IS NULL;
 
 -- +goose Down
 DROP VIEW not_deleted_installation;
+
 DROP TABLE installation;

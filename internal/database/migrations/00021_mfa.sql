@@ -40,7 +40,7 @@ CREATE INDEX index_mfa_method_type_phone__phone ON mfa_method_type_phone (phone)
 
 CREATE TABLE mfa_method_type_totp (
   id INTEGER PRIMARY KEY NOT NULL REFERENCES mfa_method (id) ON DELETE CASCADE,
-  secret_key TEXT NOT NULL,
+  secret_key TEXT NOT NULL, -- encrypted
   algorithm TEXT NOT NULL DEFAULT 'SHA-1',
   CONSTRAINT chk_mfa_method_type_totp_algorithm CHECK (
     algorithm IN ('SHA-1', 'SHA-256', 'SHA-512', 'MD5')
