@@ -12,6 +12,7 @@ import (
 	"github.com/Nidal-Bakir/go-todo-backend/internal/apperr"
 	"github.com/Nidal-Bakir/go-todo-backend/internal/database"
 	"github.com/Nidal-Bakir/go-todo-backend/internal/database/database_queries"
+	"github.com/Nidal-Bakir/go-todo-backend/internal/encryption"
 	"github.com/Nidal-Bakir/go-todo-backend/internal/session"
 
 	"github.com/Nidal-Bakir/go-todo-backend/internal/feat/auth/oauth/oidc"
@@ -796,7 +797,7 @@ func (repo repositoryImpl) LoginOrCreateUserWithOidc(
 ) (User, string, error) {
 	zlog := zerolog.Ctx(ctx)
 
-	oidcData, err := oidc.NewOidc(params.OauthProvider).Exec(ctx, params.Code, params.CodeVerifier, params.OidcToken)
+	oidcData, err := oidc.NewOidc(params.OauthProvider).ExecEncrypted(ctx, params.Code, params.CodeVerifier, params.OidcToken, encryption.DefaultAesCipher())
 	if err != nil {
 		zlog.Err(err).Msgf("error while running oidc action for provider: %s", params.OauthProvider.String())
 		return User{}, "", err

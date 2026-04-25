@@ -11,7 +11,7 @@ import (
 	"golang.org/x/oauth2"
 )
 
-func googleOidcFunc(ctx context.Context, code, codeVerifier, oidcToken string) (data OidcData, err error) {
+func googleOidcFunc(ctx context.Context, code, codeVerifier, oidcToken string) (data *OidcData, err error) {
 	zlog := zerolog.Ctx(ctx)
 
 	var oauthToken *oauth2.Token

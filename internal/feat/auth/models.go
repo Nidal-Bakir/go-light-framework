@@ -478,7 +478,7 @@ type LoginOrCreateUserWithOidcData struct {
 	InstallationId     int32
 	IpAddress          netip.Addr
 
-	oidc.OidcData
+	*oidc.OidcData
 }
 
 type LoginOrCreateUserWithOidcRepoParam struct {
