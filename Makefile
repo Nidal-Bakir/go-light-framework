@@ -25,6 +25,10 @@ docker-dev-watch-up-build:
 docker-dev-watch-down:
 	@sudo docker compose --profile dev-watch down
 
+# enter the psql service
+psql:
+	@sudo docker compose exec psql psql -U ${DB_USERNAME} -d ${DB_DATABASE}
+
 # Test the application
 test:
 	@echo "Testing..."
