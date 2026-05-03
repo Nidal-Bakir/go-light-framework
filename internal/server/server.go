@@ -10,7 +10,6 @@ import (
 	"strconv"
 	"time"
 
-	"github.com/Nidal-Bakir/go-todo-backend/internal/appenv"
 	"github.com/Nidal-Bakir/go-todo-backend/internal/cron"
 
 	"github.com/Nidal-Bakir/go-todo-backend/internal/database"
@@ -26,7 +25,7 @@ import (
 
 var (
 	serverPort      = os.Getenv("SERVER_PORT")
-	FrontendDomains = appenv.DecodeEnvList(os.Getenv("FRONTEND_DOMAINS_LIST"))
+	FrontendDomain = os.Getenv("FRONTEND_DOMAIN")
 )
 
 type Server struct {

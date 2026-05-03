@@ -65,14 +65,14 @@ func (s *Server) RegisterRoutes(ctx context.Context) http.Handler {
 		),
 		middleware.StripSlashes,
 		rateLimitGlobal,
-		middleware.CSRFProtection(FrontendDomains...),
+		middleware.CSRFProtection(FrontendDomain),
 	)
 }
 
 func corsMiddleware(next http.Handler) http.HandlerFunc {
 	o := cors.Options{
 		Debug:            appenv.IsLocal(),
-		AllowedOrigins:   FrontendDomains,
+		AllowedOrigins:   []string{FrontendDomain},
 		AllowedMethods:   []string{"OPTIONS", "HEAD", "GET", "POST", "DELETE", "PUT", "PATCH"},
 		AllowedHeaders:   []string{"Content-Type", "Authorization", "Accept", "Accept-Language", "A-Client-API-Token"},
 		AllowCredentials: true,

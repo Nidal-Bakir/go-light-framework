@@ -10,11 +10,10 @@ services:
     ports:
       - "127.0.0.1:${SERVER_PORT}:8080"
     secrets:
-      - env
       - jws_private_key
       - client_secret_2_557898105577
-    environment:
-      - ENV_FILE_PATH=/run/secrets/env
+    env_file:
+      - .env
     networks:
       - app-network
     depends_on:
@@ -76,11 +75,10 @@ services:
     volumes:
       - ./:/app
     secrets:
-      - env
       - jws_private_key
       - client_secret_2_557898105577
-    environment:
-      - ENV_FILE_PATH=/run/secrets/env
+    env_file:
+      - .env
     networks:
       - app-network
     depends_on:
@@ -130,8 +128,6 @@ networks:
     driver: bridge
 
 secrets:
-  env:
-    file: .env
   jws_private_key:
     file: jws_private_key.pem
   client_secret_2_557898105577:
