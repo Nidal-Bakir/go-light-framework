@@ -20,11 +20,12 @@ var (
 		"https://www.googleapis.com/auth/userinfo.profile",
 		"https://www.googleapis.com/auth/userinfo.email",
 	}
-	OidcOpenIdScope = []string{"openid"}
+	OidcOpenIdScope      = []string{"openid"}
+	clientSecretFilePath = os.Getenv("GOOGLE_CLIENT_SECRET_557898105577")
 )
 
 func init() {
-	clientSecretJsonFileData, err := os.ReadFile("./client_secret_2_557898105577-t939f5gnmonoosmmbjbpid3q6dug21fk.apps.googleusercontent.com.json")
+	clientSecretJsonFileData, err := os.ReadFile(clientSecretFilePath)
 	if err != nil {
 		panic(err)
 	}

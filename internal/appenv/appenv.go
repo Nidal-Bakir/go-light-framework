@@ -8,17 +8,18 @@ import (
 )
 
 var (
-	isProd  = false
-	isStag  = false
-	isLocal = false
-	EnvName = ""
+	isProd      = false
+	isStag      = false
+	isLocal     = false
+	EnvName     = ""
+	envFilePath = os.Getenv("ENV_FILE_PATH")
 )
 
 func init() {
-	file, err := os.Open(".env")
+	file, err := os.Open(envFilePath)
 	if err != nil {
 		pwd, _ := os.Getwd()
-		log.Fatal("error: can not read .env file, pwd= ", pwd)
+		log.Fatalf("error: can not read .env file, pwd=%s ,env path=%s, err=%v", pwd, envFilePath, err)
 	}
 	defer file.Close()
 
