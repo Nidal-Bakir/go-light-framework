@@ -46,6 +46,7 @@ func (s *Server) RegisterRoutes(ctx context.Context) http.Handler {
 		corsMiddleware,
 		// required for the rate limiter to function correctly and for logging
 		middleware.RealIp(),
+		middleware.Heartbeat,
 		middleware.RequestUUIDMiddleware,
 		middleware.LocalizerInjector,
 		middleware.If(
@@ -64,7 +65,6 @@ func (s *Server) RegisterRoutes(ctx context.Context) http.Handler {
 		),
 		middleware.StripSlashes,
 		rateLimitGlobal,
-		middleware.Heartbeat,
 		middleware.CSRFProtection(FrontendDomains...),
 	)
 }
