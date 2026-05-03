@@ -59,7 +59,7 @@ func GetLocalizer(tag language.Tag) *Localizer {
 	canonical := tag.String()
 	if _, ok := locales[canonical]; !ok {
 		l := locales[languageTags[0].String()]
-		l.logger.Error().Msgf("Language %s not found, will default to %s", canonical, languageTags[0].String())
+		l.logger.Warn().Msgf("Language %s not found, will default to %s", canonical, languageTags[0].String())
 		return l
 	}
 	return locales[canonical]
