@@ -1,8 +1,6 @@
 include .env
 .DEFAULT_GOAL := build
 
-.PHONY: build test clean
-
 build:
 	@echo "Building..."
 	@go build -o ./bin/api/main cmd/api/main.go
@@ -11,18 +9,6 @@ build:
 run:
 	@go run cmd/api/main.go
 
-# Create the docker containers
-docker-up:
-	@sudo docker compose up
-
-# Create and build the docker containers
-docker-up-build:
-	@sudo docker compose up	--build
-
-# Shutdown the development containers
-docker-down:
-	@sudo docker compose down
-
 # Create and build the development docker containers
 docker-dev-up-build:
 	@sudo docker compose --profile dev up --build
@@ -30,6 +16,14 @@ docker-dev-up-build:
 # Shutdown the containers
 docker-dev-down:
 	@sudo docker compose --profile dev down
+
+# Create and build the watch-development docker containers
+docker-dev-watch-up-build:
+	@sudo docker compose --profile dev-watch up --build
+
+# Shutdown the containers
+docker-dev-watch-down:
+	@sudo docker compose --profile dev-watch down
 
 # Test the application
 test:

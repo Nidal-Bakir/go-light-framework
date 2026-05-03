@@ -1,0 +1,27 @@
+# === Air & Build ===
+tmp/
+bin/
+
+# === Git & Secrets ===
+.git/
+.env
+*.pem
+*.jks
+client_secret*.json
+
+# === IDE / Editor ===
+.zed/
+.idea/
+.vscode/
+*.swp
+*.swo
+*~
+
+# === Logs & Temp ===
+*.log
+logs/
+*.tmp
+
+# === Go ===
+vendor/
+*_test.go

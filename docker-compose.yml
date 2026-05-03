@@ -1,8 +1,36 @@
 name: go-light-framework
 
 services:
+  app:
+    build:
+      context: .
+      dockerfile: ./docker/app/Dockerfile
+    profiles: ["dev", "prod"]
+    restart: always
+    ports:
+      - "127.0.0.1:${SERVER_PORT}:8080"
+    secrets:
+      - env
+      - jws_private_key
+      - client_secret_2_557898105577
+    environment:
+      - ENV_FILE_PATH=/run/secrets/env
+    networks:
+      - app-network
+    depends_on:
+      psql:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8080/ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
   psql:
     build: ./docker/postgres
+    profiles: ["dev-watch", "dev", "prod"]
     restart: always
     shm_size: 256mb
     environment:
@@ -21,9 +49,49 @@ services:
       timeout: 5s
       retries: 5
 
+  redis:
+    build: ./docker/redis
+    profiles: ["dev-watch", "dev", "prod"]
+    restart: always
+    ports:
+      - "127.0.0.1:${REDIS_PORT}:6379"
+    volumes:
+      - redis_volume:/data
+    networks:
+      - app-network
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  app-dev-air:
+    build:
+      context: .
+      dockerfile: ./docker/watch_app/Dockerfile
+    profiles: ["dev-watch"]
+    restart: always
+    ports:
+      - "127.0.0.1:${SERVER_PORT}:8080"
+    volumes:
+      - ./:/app
+    secrets:
+      - env
+      - jws_private_key
+      - client_secret_2_557898105577
+    environment:
+      - ENV_FILE_PATH=/run/secrets/env
+    networks:
+      - app-network
+    depends_on:
+      psql:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+
   pgadmin:
     build: ./docker/pgadmin
-    profiles: ["dev"]
+    profiles: ["dev-watch", "dev"]
     restart: always
     environment:
       PGADMIN_DEFAULT_EMAIL: ${PGADMIN_DEFAULT_EMAIL}
@@ -40,7 +108,7 @@ services:
 
   redisinsight:
     build: ./docker/redisinsight
-    profiles: ["dev"]
+    profiles: ["dev-watch", "dev"]
     restart: always
     ports:
       - "127.0.0.1:5540:5540"
@@ -51,21 +119,6 @@ services:
     depends_on:
       - redis
 
-  redis:
-    build: ./docker/redis
-    restart: always
-    ports:
-      - "${REDIS_PORT}:6379"
-    volumes:
-      - redis_volume:/data
-    networks:
-      - app-network
-    healthcheck:
-      test: ["CMD", "redis-cli", "ping"]
-      interval: 10s
-      timeout: 5s
-      retries: 5
-
 volumes:
   psql_volume:
   redis_volume:
@@ -75,3 +128,11 @@ volumes:
 networks:
   app-network:
     driver: bridge
+
+secrets:
+  env:
+    file: .env
+  jws_private_key:
+    file: jws_private_key.pem
+  client_secret_2_557898105577:
+    file: client_secret_2.json
