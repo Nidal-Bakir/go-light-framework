@@ -116,7 +116,6 @@ func ThrottleWithOpts(opts ThrottleOpts) func(http.Handler) http.HandlerFunc {
 				errCapacityExceededFn()
 			}
 		}
-
 	}
 }
 

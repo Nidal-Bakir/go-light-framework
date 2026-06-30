@@ -41,7 +41,8 @@ func webRouter(_ context.Context, authRepo auth.Repository) http.Handler {
 			oauthlogin(authRepo),
 			Installation(authRepo),
 		))
-	mux.HandleFunc("/auth/oidc/{provider}/callback",
+	mux.HandleFunc(
+		"/auth/oidc/{provider}/callback",
 		middleware.MiddlewareChain(
 			oauthloginCallback(authRepo),
 			Installation(authRepo),

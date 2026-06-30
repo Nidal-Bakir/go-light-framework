@@ -79,6 +79,7 @@ const (
 func (l LoginIdentityType) IsUsingEmail() bool {
 	return l == LoginIdentityTypeEmail
 }
+
 func (l LoginIdentityType) IsUsingPhoneNumber() bool {
 	return l == LoginIdentityTypePhone
 }
@@ -228,6 +229,7 @@ var clientTypes = []ClientType{ClientTypeWeb, ClientTypeMobile, ClientTypeEmbedd
 func (c ClientType) String() string {
 	return string(c)
 }
+
 func (c ClientType) IsWeb() bool {
 	return c == ClientTypeWeb
 }
@@ -331,54 +333,40 @@ type CreatePasswordUserArgs struct {
 }
 
 type User struct {
-	ID           int32              `json:"id"`
-	Username     string             `json:"username"`
-	ProfileImage pgtype.Text        `json:"profile_image"`
-	FirstName    string             `json:"first_name"`
-	MiddleName   pgtype.Text        `json:"middle_name"`
-	LastName     pgtype.Text        `json:"last_name"`
-	CreatedAt    pgtype.Timestamptz `json:"created_at"`
-	UpdatedAt    pgtype.Timestamptz `json:"updated_at"`
-	BlockedAt    pgtype.Timestamptz `json:"blocked_at"`
-	DeletedAt    pgtype.Timestamptz `json:"deleted_at"`
-	RoleName     pgtype.Text        `json:"role_name"`
+	ID            int32              `json:"id"`
+	Username      string             `json:"username"`
+	ProfileImage  pgtype.Text        `json:"profile_image"`
+	FirstName     string             `json:"first_name"`
+	LastName      pgtype.Text        `json:"last_name"`
+	CreatedAt     pgtype.Timestamptz `json:"created_at"`
+	InfoUpdatedAt pgtype.Timestamptz `json:"info_updated_at"`
+	BlockedAt     pgtype.Timestamptz `json:"blocked_at"`
+	DeletedAt     pgtype.Timestamptz `json:"deleted_at"`
+	RoleName      pgtype.Text        `json:"role_name"`
 }
 
-func NewUserFromDatabaseUser(u database_queries.User) User {
+func NewUserFromDatabaseUser(u database_queries.UserWithInfo) User {
 	return User{
-		ID:           u.ID,
-		Username:     u.Username,
-		ProfileImage: u.ProfileImage,
-		FirstName:    u.FirstName,
-		MiddleName:   u.MiddleName,
-		LastName:     u.LastName,
-		CreatedAt:    u.CreatedAt,
-		UpdatedAt:    u.UpdatedAt,
-		BlockedAt:    u.BlockedAt,
-		DeletedAt:    u.DeletedAt,
-		RoleName:     u.RoleName,
+		ID:            u.ID,
+		Username:      u.Username,
+		ProfileImage:  u.ProfileImage,
+		FirstName:     u.FirstName,
+		LastName:      u.LastName,
+		CreatedAt:     u.CreatedAt,
+		InfoUpdatedAt: u.InfoUpdatedAt,
+		BlockedAt:     u.BlockedAt,
+		DeletedAt:     u.DeletedAt,
+		RoleName:      u.RoleName,
 	}
 }
 
 type UserAndSession struct {
 	UserID           int32
-	UserUsername     string
-	UserProfileImage pgtype.Text
-	UserFirstName    string
-	UserMiddleName   pgtype.Text
-	UserLastName     pgtype.Text
-	UserCreatedAt    pgtype.Timestamptz
-	UserUpdatedAt    pgtype.Timestamptz
 	UserBlockedAt    pgtype.Timestamptz
 	UserBlockedUntil pgtype.Timestamptz
-	UserDeletedAt    pgtype.Timestamptz
 	UserRoleName     pgtype.Text
 
 	SessionID               int64
-	SessionCreatedAt        pgtype.Timestamptz
-	SessionUpdatedAt        pgtype.Timestamptz
-	SessionExpiresAt        pgtype.Timestamptz
-	SessionDeletedAt        pgtype.Timestamptz
 	SessionOriginatedFrom   int32
 	SessionUsedInstallation int32
 	SessionPurpose          SessionPurpose
@@ -388,11 +376,6 @@ type UserAndSession struct {
 func NewUserAndSessionFromDatabaseUserAndSessionRow(u database_queries.UsersGetUserAndSessionDataBySessionTokenRow, sessionToken session.Session) UserAndSession {
 	return UserAndSession{
 		UserID:           u.UserID,
-		UserUsername:     u.UserUsername,
-		UserProfileImage: u.UserProfileImage,
-		UserFirstName:    u.UserFirstName,
-		UserMiddleName:   u.UserMiddleName,
-		UserLastName:     u.UserLastName,
 		UserBlockedAt:    u.UserBlockedAt,
 		UserBlockedUntil: u.UserBlockedUntil,
 		UserRoleName:     u.UserRoleName,

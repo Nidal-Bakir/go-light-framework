@@ -11,10 +11,12 @@ import (
 	"github.com/google/uuid"
 )
 
-type OtpChannel string
-type OtpPurpose string
-type TotpAlgorithm string
-type TotpDigits uint8
+type (
+	OtpChannel    string
+	OtpPurpose    string
+	TotpAlgorithm string
+	TotpDigits    uint8
+)
 
 const (
 	EmailChannel OtpChannel = "email"

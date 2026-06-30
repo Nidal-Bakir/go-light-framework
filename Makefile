@@ -40,10 +40,10 @@ chk:
 	@go vet ./...
 	@staticcheck ./...
 
-# Format the codebase
+# Format the codebase using gofumpt
 fmt:
 	@echo "Formating..."
-	@go fmt ./...
+	@gofumpt -w .
 
 # Live Reload
 watch:
@@ -59,46 +59,46 @@ sqlc-gen:
 GOOSE_CMD=GOOSE_MIGRATION_DIR=${GOOSE_MIGRATION_DIR} GOOSE_DRIVER=${GOOSE_DRIVER} GOOSE_DBSTRING=${GOOSE_DBSTRING} goose
 
 # Migrate the DB to the most recent version available
-goose-up:
+migrate-up:
 	@${GOOSE_CMD} up
 
 # Roll back the version by 1
-goose-up-by-one:
+migrate-up-by-one:
 	@${GOOSE_CMD} up-by-one
 
 # Migrate the DB to a specific VERSION
-goose-up-to :
+migrate-up-to :
 	@read -p "version: " version; ${GOOSE_CMD} up-to $$version
 
 # Roll back the version by 1
-goose-down:
+migrate-down:
 	@${GOOSE_CMD} down
 
 # Roll back to a specific VERSION
-goose-down-to:
+migrate-down-to:
 	@read -p "version: " version; ${GOOSE_CMD} down-to $$version
 
 # Re-run the latest migration
-goose-redo :
+migrate-redo :
 	@${GOOSE_CMD} redo
 
 # Roll back all migrations
-goose-reset:
+migrate-reset:
 	@${GOOSE_CMD} reset
 
 # Replay all migration from groud up
-goose-fresh: goose-reset goose-up
+migrate-fresh: migrate-reset migrate-up
 
 # Dump the migration status for the current DB
-goose-status:
+migrate-status:
 	@${GOOSE_CMD} status
 
 # Print the current version of the database
-goose-version:
+migrate-version:
 	@${GOOSE_CMD} version
 
 # Apply sequential ordering to migrations
-goose-fix:
+migrate-fix:
 	@${GOOSE_CMD} fix
 
 # connection to the redis server
@@ -107,7 +107,7 @@ REDIS_CLI= redis-cli -h ${REDIS_ADDR} -p ${REDIS_PORT} --user ${REDIS_USERNAME} 
 redis-flushall:
 	@${REDIS_CLI} FLUSHALL
 
-fresh-server: goose-fresh redis-flushall sqlc-gen
+fresh-server: migrate-fresh redis-flushall sqlc-gen
 	@echo "Done"
 
 # Clean the binary

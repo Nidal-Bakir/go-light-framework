@@ -120,20 +120,23 @@ WHERE
 WITH
   new_user AS (
     INSERT INTO
-      users (
-        username,
-        profile_image,
-        first_name,
-        last_name,
-        role_name
-      )
+      users (username, role_name)
     VALUES
       (
         @user_username::text,
+        sqlc.narg(user_role_name)::text
+      )
+    RETURNING
+      *
+  ),
+  new_user_info AS (
+    INSERT INTO
+      user_info (profile_image, first_name, last_name)
+    VALUES
+      (
         sqlc.narg(user_profile_image)::text,
         @user_first_name::text,
-        sqlc.narg(user_last_name)::text,
-        sqlc.narg(user_role_name)::text
+        sqlc.narg(user_last_name)::text
       )
     RETURNING
       *
@@ -182,7 +185,8 @@ WITH
 SELECT
   *
 FROM
-  new_user;
+  new_user,
+  new_user_info;
 
 
 -- name: LoginIdentityCreateNewPasswordLoginIdentity :one
@@ -234,12 +238,11 @@ SELECT
   u.username AS user_username,
   u.profile_image AS user_profile_image,
   u.first_name AS user_first_name,
-  u.middle_name AS user_middle_name,
   u.last_name AS user_last_name,
   u.blocked_at AS user_blocked_at,
   u.blocked_until AS user_blocked_until,
   u.created_at AS user_created_at,
-  u.updated_at AS user_updated_at,
+  u.info_updated_at AS user_updated_at,
   u.role_name AS user_role_name,
   li.id AS login_identity_id,
   od.provider_name AS oauth_provider_name,
@@ -248,7 +251,7 @@ FROM
   active_oidc_data AS od
   JOIN active_oidc_login_identity AS oli ON od.id = oli.oidc_data_id
   JOIN active_login_identity AS li ON oli.login_identity_id = li.id
-  JOIN users AS u ON li.user_id = u.id
+  JOIN user_with_info AS u ON li.user_id = u.id
 WHERE
   od.sub = @oidc_sub::text
   AND li.identity_type = 'oidc'
@@ -306,13 +309,12 @@ SELECT
   u.username AS user_username,
   u.profile_image AS user_profile_image,
   u.first_name AS user_first_name,
-  u.middle_name AS user_middle_name,
   u.last_name AS user_last_name,
   u.blocked_at AS user_blocked_at,
   u.blocked_until AS user_blocked_until,
   u.role_name AS user_role_name
 FROM
-  users AS u
+  user_with_info AS u
   JOIN active_login_identity AS li ON u.id = li.user_id
   JOIN active_password_login_identity pli ON li.id = pli.login_identity_id
 WHERE
@@ -448,34 +450,33 @@ WHERE
 WITH
   new_user AS (
     INSERT INTO
-      users (
-        username,
-        profile_image,
-        first_name,
-        last_name,
-        role_name
-      )
+      users (username, role_name)
     VALUES
       (
         @user_username::text,
-        sqlc.narg(user_profile_image)::text,
-        @user_first_name::text,
-        sqlc.narg(user_last_name)::text,
         sqlc.narg(user_role_name)::text
       )
     RETURNING
       id AS user_id,
       username,
+      role_name,
+      created_at,
+      blocked_at,
+      blocked_until
+  ),
+  new_user_info AS (
+    INSERT INTO
+      user_info (profile_image, first_name, last_name)
+    VALUES
+      (
+        sqlc.narg(user_profile_image)::text,
+        @user_first_name::text,
+        sqlc.narg(user_last_name)::text
+      )
+    RETURNING
       profile_image,
       first_name,
-      middle_name,
-      last_name,
-      created_at,
-      updated_at,
-      blocked_at,
-      blocked_until,
-      deleted_at,
-      role_name
+      last_name
   ),
   new_identity AS (
     INSERT INTO
@@ -680,19 +681,17 @@ WITH
 SELECT
   u.user_id,
   u.username,
-  u.profile_image,
-  u.first_name,
-  u.middle_name,
-  u.last_name,
+  u.role_name,
   u.created_at,
-  u.updated_at,
   u.blocked_at,
   u.blocked_until,
-  u.deleted_at,
-  u.role_name,
+  ui.first_name,
+  ui.last_name,
+  ui.profile_image,
   i.id AS new_login_identity_id
 FROM
   new_user AS u,
+  new_user_info AS ui,
   new_identity AS i;
 
 
@@ -1738,15 +1737,15 @@ SELECT
   u.username,
   u.profile_image,
   u.first_name,
-  u.middle_name,
   u.last_name,
   u.blocked_at,
   u.blocked_until,
   u.created_at,
-  u.updated_at,
+  u.user_updated_at,
+  u.info_updated_at,
   u.role_name
 FROM
-  users AS u
+  user_with_info AS u
 WHERE
   id = $1
   AND u.deleted_at IS NULL
@@ -1762,11 +1761,6 @@ SELECT
   s.used_installation AS session_used_installation,
   s.purpose AS session_purpose,
   u.id AS user_id,
-  u.username AS user_username,
-  u.profile_image AS user_profile_image,
-  u.first_name AS user_first_name,
-  u.middle_name AS user_middle_name,
-  u.last_name AS user_last_name,
   u.blocked_at AS user_blocked_at,
   u.blocked_until AS user_blocked_until,
   u.role_name AS user_role_name
@@ -1775,9 +1769,9 @@ FROM
   JOIN active_login_identity AS li ON s.originated_from = li.id
   JOIN users AS u ON u.id = li.user_id
 WHERE
-  s.token = @ token::text
+  s.token = @token::text
   AND u.deleted_at IS NULL
-  AND s.purpose = @ token_purpose::text
+  AND s.purpose = @token_purpose::text
 LIMIT
   1;
 
@@ -1789,35 +1783,6 @@ FROM
   users
 WHERE
   username = $1;
-
-
--- name: UsersCreateNewUser :one
-INSERT INTO
-  users (
-    username,
-    profile_image,
-    first_name,
-    last_name,
-    role_name
-  )
-VALUES
-  ($1, $2, $3, $4, $5)
-RETURNING
-  *;
-
-
--- name: UsersUpdateUserData :one
-UPDATE users
-SET
-  username = $2,
-  profile_image = $3,
-  first_name = $4,
-  last_name = $5,
-  role_name = $6
-WHERE
-  id = $1
-RETURNING
-  *;
 
 
 -- name: UsersUpdateUsernameForUser :exec

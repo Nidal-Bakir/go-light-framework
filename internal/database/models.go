@@ -178,7 +178,6 @@ type NotDeletedUser struct {
 	Username     string             `json:"username"`
 	ProfileImage pgtype.Text        `json:"profile_image"`
 	FirstName    string             `json:"first_name"`
-	MiddleName   pgtype.Text        `json:"middle_name"`
 	LastName     pgtype.Text        `json:"last_name"`
 	CreatedAt    pgtype.Timestamptz `json:"created_at"`
 	UpdatedAt    pgtype.Timestamptz `json:"updated_at"`
@@ -324,7 +323,6 @@ type User struct {
 	Username     string             `json:"username"`
 	ProfileImage pgtype.Text        `json:"profile_image"`
 	FirstName    string             `json:"first_name"`
-	MiddleName   pgtype.Text        `json:"middle_name"`
 	LastName     pgtype.Text        `json:"last_name"`
 	CreatedAt    pgtype.Timestamptz `json:"created_at"`
 	UpdatedAt    pgtype.Timestamptz `json:"updated_at"`

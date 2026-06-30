@@ -43,7 +43,8 @@ func (s dbStore) StoreAttr(ctx context.Context, session string, expiresAfter tim
 				ExpiresAt: database.ToPgTypeTimestamptz(time.Now().UTC().Add(expiresAfter)),
 				AttrKey:   fields[i],
 				AttrValue: fields[i+1],
-			})
+			},
+		)
 	}
 	_, err := s.db.Queries.SessionStoreStoreAttrs(
 		ctx,

@@ -21,9 +21,7 @@ func (o OauthProvider) String() string {
 	return o.idName
 }
 
-var (
-	supportedOauthProviders = []OauthProvider{Google, Facebook}
-)
+var supportedOauthProviders = []OauthProvider{Google, Facebook}
 
 func SupportedOauthProviders() []OauthProvider {
 	return supportedOauthProviders

@@ -18,7 +18,8 @@ func NewTotpKey(accountKey, issuer string) (*TotpKey, error) {
 			Algorithm:   otp.AlgorithmSHA1,
 			Period:      30,
 			SecretSize:  20,
-		})
+		},
+	)
 	return &TotpKey{key: key}, err
 }
 

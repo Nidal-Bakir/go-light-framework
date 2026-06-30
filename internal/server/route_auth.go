@@ -365,7 +365,6 @@ func forgetPasswordRateLimiterByAccessKey(ctx context.Context, rdb *redis.Client
 			ctx,
 			rdb,
 			ratelimiter.Config{
-
 				PerTimeFrame: 10,
 				TimeFrame:    time.Hour * 24,
 				KeyPrefix:    "auth:forget:password:access_key",
@@ -506,7 +505,6 @@ func vareifyAccount(authRepo auth.Repository) http.HandlerFunc {
 		}
 
 		user, err := authRepo.CreatePasswordUser(ctx, vareifyAccountParam.Id, vareifyAccountParam.Code)
-
 		if err != nil {
 			writeError(ctx, w, r, return400IfAppErrOr500(err), err)
 			return
@@ -708,7 +706,6 @@ func validateLogoutParam(r *http.Request) (logoutParams, []error) {
 	}
 
 	return params, errList
-
 }
 
 //-----------------------------------------------------------------------------
@@ -786,7 +783,6 @@ type publicUser struct {
 	Username     string      `json:"username"`
 	ProfileImage pgtype.Text `json:"profile_image"`
 	FirstName    string      `json:"first_name"`
-	MiddleName   pgtype.Text `json:"middle_name"`
 	LastName     pgtype.Text `json:"last_name"`
 }
 
@@ -799,7 +795,6 @@ func NewPublicUserFromAuthUser(u *auth.User) *publicUser {
 		Username:     u.Username,
 		ProfileImage: u.ProfileImage,
 		FirstName:    u.FirstName,
-		MiddleName:   u.MiddleName,
 		LastName:     u.LastName,
 	}
 }
@@ -980,7 +975,6 @@ func userProfile(authRepo auth.Repository) http.HandlerFunc {
 		loginIdentitiesPublicApi := make([]PublicAPI, len(loginIdentities))
 
 		for i, lo := range loginIdentities {
-
 			loginIdentitiesPublicApi[i] = PublicAPI{
 				ID:                lo.ID,
 				Email:             newEmailForPublicAPI(lo.Email),
@@ -996,7 +990,6 @@ func userProfile(authRepo auth.Repository) http.HandlerFunc {
 			Username        string      `json:"username"`
 			ProfileImage    pgtype.Text `json:"profile_image"`
 			FirstName       string      `json:"first_name"`
-			MiddleName      pgtype.Text `json:"middle_name"`
 			LastName        pgtype.Text `json:"last_name"`
 			LoginIdentities []PublicAPI `json:"login_identities"`
 		}
@@ -1006,7 +999,6 @@ func userProfile(authRepo auth.Repository) http.HandlerFunc {
 			Username:        userAndSession.UserUsername,
 			ProfileImage:    userAndSession.UserProfileImage,
 			FirstName:       userAndSession.UserFirstName,
-			MiddleName:      userAndSession.UserMiddleName,
 			LastName:        userAndSession.UserLastName,
 			LoginIdentities: loginIdentitiesPublicApi,
 		}

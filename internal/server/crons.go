@@ -62,6 +62,7 @@ func (s *Server) _mfaSessionDeleteExpiredRows(ctx context.Context) {
 		gocron.JobOption(gocron.WithStartImmediately()),
 	)
 }
+
 func (s *Server) _mfaPendingSessionDeleteExpiredRows(ctx context.Context) {
 	s.cronScheduler.NewJob(
 		gocron.CronJob("0 2 * * *", false), // At 02:00 AM UTC

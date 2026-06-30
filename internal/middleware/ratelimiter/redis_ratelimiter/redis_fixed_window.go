@@ -29,7 +29,6 @@ func _fixedWindowAllow(ctx context.Context, key string, l *redisRatelimiter) (bo
 	windowKey := key + ":" + strconv.FormatInt(time.Now().UnixMilli()/window.Milliseconds(), 10)
 
 	rate, err := redisClient.Get(ctx, windowKey).Int()
-
 	if err != nil {
 		if !errors.Is(err, redis.Nil) {
 			zlog.Err(err).Msg("Can't rate limit, got an error from redis while geting the windowKey. Rejecting the request")

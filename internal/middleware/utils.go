@@ -7,7 +7,7 @@ import (
 
 type Middleware func(http.Handler) http.HandlerFunc
 
-// Wrappe an endpoint with a chain of middlewares
+// Wraps an endpoint with a chain of middlewares
 //
 // e.g:
 //

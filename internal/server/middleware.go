@@ -156,7 +156,6 @@ func Installation(authRepo auth.Repository) func(http.Handler) http.HandlerFunc 
 			}
 
 			installation, err := authRepo.GetInstallationUsingToken(ctx, installationToken, attachedToSessionId)
-
 			if err != nil {
 				if errors.Is(err, apperr.ErrNoResult) {
 					sendError()

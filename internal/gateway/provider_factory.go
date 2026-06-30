@@ -13,8 +13,7 @@ func NewProviderFactory(ctx context.Context) ProviderFactory {
 	return new(providerImpl)
 }
 
-type providerImpl struct {
-}
+type providerImpl struct{}
 
 func (p providerImpl) NewSMSProvider(ctx context.Context, contryCode int) Sender {
 	return newSMSProvider(contryCode)

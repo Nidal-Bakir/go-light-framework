@@ -18,7 +18,7 @@ func UseTransaction(ctx context.Context, db *Service, fn func(queries *database_
 	}
 
 	defer func() {
-		rolbackFn := func() {
+		rollbackFn := func() {
 			rollBackErr := tx.Rollback(ctx)
 			err = errors.Join(rollBackErr, ctx.Err(), err)
 		}
@@ -29,10 +29,10 @@ func UseTransaction(ctx context.Context, db *Service, fn func(queries *database_
 
 		select {
 		case <-ctx.Done():
-			rolbackFn()
+			rollbackFn()
 		default:
 			if err != nil {
-				rolbackFn()
+				rollbackFn()
 			} else {
 				commitFn()
 			}

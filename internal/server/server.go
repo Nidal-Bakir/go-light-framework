@@ -3,11 +3,10 @@ package server
 import (
 	"context"
 	"fmt"
-	"sync"
-
 	"net/http"
 	"os"
 	"strconv"
+	"sync"
 	"time"
 
 	"github.com/Nidal-Bakir/go-todo-backend/internal/cron"
@@ -24,7 +23,7 @@ import (
 )
 
 var (
-	serverPort      = os.Getenv("SERVER_PORT")
+	serverPort     = os.Getenv("SERVER_PORT")
 	FrontendDomain = os.Getenv("FRONTEND_DOMAIN")
 )
 

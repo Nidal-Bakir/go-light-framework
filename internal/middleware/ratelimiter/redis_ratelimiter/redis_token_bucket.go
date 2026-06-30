@@ -3,7 +3,6 @@ package redis_ratelimiter
 import (
 	"context"
 	"errors"
-
 	"time"
 
 	"github.com/Nidal-Bakir/go-todo-backend/internal/middleware/ratelimiter"
@@ -32,7 +31,6 @@ func _tokenBucketLimiterAllow(ctx context.Context, key string, l *redisRatelimit
 	pip.PTTL(ctx, key) // 0 for TTL
 	pip.Get(ctx, key)  // 1 for GET
 	pipRes, err := pip.Exec(ctx)
-
 	if err != nil {
 		if !errors.Is(err, redis.Nil) {
 			zlog.Err(err).Msg("Can't rate limit, got an error from redis while geting the key. Rejecting the request")

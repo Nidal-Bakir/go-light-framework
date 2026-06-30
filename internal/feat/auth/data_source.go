@@ -56,12 +56,12 @@ type DataSource interface {
 
 	StoreUserInTempCache(ctx context.Context, tUser TempPasswordUser) error
 	StoreForgetPasswordDataInTempCache(ctx context.Context, forgetPassData ForgetPasswordTmpDataStore) error
-	CreatePasswordUser(ctx context.Context, userArgs CreatePasswordUserArgs) (user database_queries.User, err error)
+	CreatePasswordUser(ctx context.Context, userArgs CreatePasswordUserArgs) (user database_queries.UserWithInfo, err error)
 	CreateNewSessionAndAttachUserToInstallation(ctx context.Context, loginIdentityId, installationId int32, token string, ipAddress netip.Addr, expiresAt time.Time) error
 	CreateInstallation(ctx context.Context, data CreateInstallationData, installationToken string) error
 	CreateNewSession(ctx context.Context, loginIdentityId, installationId int32, token string, ipAddress netip.Addr, expiresAt time.Time, sessionPurpose SessionPurpose) error
 
-	LoginOrCreateUserWithOidc(ctx context.Context, data LoginOrCreateUserWithOidcData, tokenGenerator func(userId int32) (string, time.Time, error)) (database_queries.User, error)
+	LoginOrCreateUserWithOidc(ctx context.Context, data LoginOrCreateUserWithOidcData, tokenGenerator func(userId int32) (string, time.Time, error)) (database_queries.UserWithInfo, error)
 
 	// Update ---
 
@@ -199,7 +199,7 @@ func (ds dataSourceImpl) DeleteUserFromTempCache(ctx context.Context, tempUserId
 	return ds.redis.Del(ctx, genTempUserId(tempUserId)).Err()
 }
 
-func (ds dataSourceImpl) CreatePasswordUser(ctx context.Context, userArgs CreatePasswordUserArgs) (user database_queries.User, err error) {
+func (ds dataSourceImpl) CreatePasswordUser(ctx context.Context, userArgs CreatePasswordUserArgs) (user database_queries.UserWithInfo, err error) {
 	var passwordEmail pgtype.Text
 	var passwordPhone pgtype.Text
 
@@ -211,7 +211,6 @@ func (ds dataSourceImpl) CreatePasswordUser(ctx context.Context, userArgs Create
 	userRow, err := ds.db.Queries.LoginIdentityCreateNewUserAndPasswordLoginIdentity(
 		ctx,
 		database_queries.LoginIdentityCreateNewUserAndPasswordLoginIdentityParams{
-
 			UserFirstName:    userArgs.Fname,
 			UserUsername:     userArgs.Username,
 			UserLastName:     database.ToPgTypeText(userArgs.Lname),
@@ -227,15 +226,13 @@ func (ds dataSourceImpl) CreatePasswordUser(ctx context.Context, userArgs Create
 		},
 	)
 
-	user = database_queries.User{
+	user = database_queries.UserWithInfo{
 		ID:           userRow.ID,
 		Username:     userRow.Username,
 		ProfileImage: userRow.ProfileImage,
 		FirstName:    userRow.FirstName,
-		MiddleName:   userRow.MiddleName,
 		LastName:     userRow.LastName,
 		CreatedAt:    userRow.CreatedAt,
-		UpdatedAt:    userRow.UpdatedAt,
 		BlockedAt:    userRow.BlockedAt,
 		DeletedAt:    userRow.DeletedAt,
 		RoleName:     userRow.RoleName,
@@ -499,7 +496,6 @@ func (ds dataSourceImpl) StoreForgetPasswordDataInTempCache(ctx context.Context,
 	pip.HSet(ctx, key, forgetPassData.ToMap())
 	pip.Expire(ctx, key, ExpirationForForgetPasswordTempData)
 	resultArray, err := pip.Exec(ctx)
-
 	if err != nil {
 		return err
 	}
@@ -581,9 +577,8 @@ func (ds dataSourceImpl) LoginOrCreateUserWithOidc(
 	ctx context.Context,
 	oidcParamData LoginOrCreateUserWithOidcData,
 	tokenGenerator func(userId int32) (string, time.Time, error),
-) (database_queries.User, error) {
-
-	var user database_queries.User
+) (database_queries.UserWithInfo, error) {
+	var user database_queries.UserWithInfo
 
 	fn := func(queries *database_queries.Queries) error {
 		var loginIdentityId int32 = -1
@@ -640,13 +635,13 @@ func (ds dataSourceImpl) LoginOrCreateUserWithOidc(
 
 	err := database.UseTransaction(ctx, ds.db, fn)
 	if err != nil {
-		return database_queries.User{}, err
+		return database_queries.UserWithInfo{}, err
 	}
 
 	return user, nil
 }
 
-func oidcCreateAccountAndLogin(ctx context.Context, queries *database_queries.Queries, oidcParamData LoginOrCreateUserWithOidcData) (loginIdentityId int32, user database_queries.User, err error) {
+func oidcCreateAccountAndLogin(ctx context.Context, queries *database_queries.Queries, oidcParamData LoginOrCreateUserWithOidcData) (loginIdentityId int32, user database_queries.UserWithInfo, err error) {
 	result, err := queries.LoginIdentityCreateNewUserAndOIDCLoginIdentity(
 		ctx,
 		database_queries.LoginIdentityCreateNewUserAndOIDCLoginIdentityParams{
@@ -674,18 +669,16 @@ func oidcCreateAccountAndLogin(ctx context.Context, queries *database_queries.Qu
 		},
 	)
 	if err != nil {
-		return -1, database_queries.User{}, err
+		return -1, database_queries.UserWithInfo{}, err
 	}
 
-	user = database_queries.User{
+	user = database_queries.UserWithInfo{
 		ID:           result.UserID,
 		Username:     result.Username,
 		FirstName:    result.FirstName,
 		ProfileImage: result.ProfileImage,
-		MiddleName:   result.MiddleName,
 		LastName:     result.LastName,
 		CreatedAt:    result.CreatedAt,
-		UpdatedAt:    result.UpdatedAt,
 		BlockedAt:    result.BlockedAt,
 		BlockedUntil: result.BlockedUntil,
 		RoleName:     result.RoleName,
@@ -699,7 +692,7 @@ func oidcLoginOnly(
 	queries *database_queries.Queries,
 	oidcParamData LoginOrCreateUserWithOidcData,
 	oidcUser database_queries.LoginIdentityGetOIDCDataBySubRow,
-) (database_queries.User, error) {
+) (database_queries.UserWithInfo, error) {
 	// 1. Check if the user already has an OAuth integration associated with the
 	//    provided scopes (`data.OauthScopes`).
 	//
@@ -735,7 +728,7 @@ func oidcLoginOnly(
 	)
 	if err != nil {
 		if !database.IsErrPgxNoRows(err) {
-			return database_queries.User{}, err
+			return database_queries.UserWithInfo{}, err
 		}
 		// No existing connection found for this user with the given scopes and provider.
 		// Create a new connection.
@@ -753,7 +746,7 @@ func oidcLoginOnly(
 			},
 		)
 		if err != nil {
-			return database_queries.User{}, err
+			return database_queries.UserWithInfo{}, err
 		}
 
 	} else {
@@ -773,7 +766,7 @@ func oidcLoginOnly(
 					},
 				)
 				if err != nil {
-					return database_queries.User{}, err
+					return database_queries.UserWithInfo{}, err
 				}
 			} else { // there is no record for oauth token create one for this integration
 				err := queries.OauthTokenCreate(
@@ -788,7 +781,7 @@ func oidcLoginOnly(
 					},
 				)
 				if err != nil {
-					return database_queries.User{}, err
+					return database_queries.UserWithInfo{}, err
 				}
 			}
 		}
@@ -806,24 +799,23 @@ func oidcLoginOnly(
 		},
 	)
 	if err != nil {
-		return database_queries.User{}, err
+		return database_queries.UserWithInfo{}, err
 	}
 
 	err = queries.LoginIdentityUpdateLastUsedAtToNow(ctx, oidcUser.LoginIdentityID)
 	if err != nil {
 		zerolog.Ctx(ctx).Err(err).Int32("login_identity_id", oidcUser.LoginIdentityID).Msg("can not update the last used at for login identitiy")
-		return database_queries.User{}, err
+		return database_queries.UserWithInfo{}, err
 	}
 
-	user := database_queries.User{
+	user := database_queries.UserWithInfo{
 		ID:           oidcUser.UserID,
 		Username:     oidcUser.UserUsername,
 		FirstName:    oidcUser.UserFirstName,
 		ProfileImage: oidcUser.UserProfileImage,
-		MiddleName:   oidcUser.UserMiddleName,
 		LastName:     oidcUser.UserLastName,
 		CreatedAt:    oidcUser.UserCreatedAt,
-		UpdatedAt:    oidcUser.UserUpdatedAt,
+		InfoUpdatedAt:    oidcUser.UserUpdatedAt,
 		BlockedAt:    oidcUser.UserBlockedAt,
 		BlockedUntil: oidcUser.UserBlockedUntil,
 		RoleName:     oidcUser.UserRoleName,
@@ -911,7 +903,8 @@ func (ds dataSourceImpl) MfaGetEmailMfaForUser(ctx context.Context, userId int32
 		database_queries.MfaGetEmailMfaForUserParams{
 			UserID: userId,
 			Email:  email.String(),
-		})
+		},
+	)
 	if database.IsErrPgxNoRows(err) {
 		err = apperr.ErrNoResult
 	}
@@ -924,7 +917,8 @@ func (ds dataSourceImpl) MfaGetPhoneMfaForUser(ctx context.Context, userId int32
 		database_queries.MfaGetPhoneMfaForUserParams{
 			UserID: userId,
 			Phone:  phone.ToE164(),
-		})
+		},
+	)
 	if database.IsErrPgxNoRows(err) {
 		err = apperr.ErrNoResult
 	}
@@ -977,6 +971,7 @@ func (ds dataSourceImpl) GetPendingMfaSessionWithOtpChallengeData(ctx context.Co
 		},
 	)
 }
+
 func (ds dataSourceImpl) SetOtpChallengeForPendingMfa(ctx context.Context, mfaSessionId uuid.UUID, mfaMethodId int32, otpChallenge uuid.UUID) error {
 	return ds.db.Queries.MfaSetOtpChallengeForPendingMfa(
 		ctx,
@@ -998,7 +993,8 @@ func (ds dataSourceImpl) MfaUpdateOwnershipVerificationForMfaMethodTypeEmail(ctx
 		database_queries.MfaUpdateOwnershipVerificationForMfaMethodTypeEmailParams{
 			ID:                    mfaId,
 			OwnershipVerification: ownershipVerificationId,
-		})
+		},
+	)
 }
 
 func (ds dataSourceImpl) MfaUpdateOwnershipVerificationForMfaMethodTypePhone(ctx context.Context, mfaId int32, ownershipVerificationId uuid.UUID) error {
@@ -1007,7 +1003,8 @@ func (ds dataSourceImpl) MfaUpdateOwnershipVerificationForMfaMethodTypePhone(ctx
 		database_queries.MfaUpdateOwnershipVerificationForMfaMethodTypePhoneParams{
 			ID:                    mfaId,
 			OwnershipVerification: ownershipVerificationId,
-		})
+		},
+	)
 }
 
 func (ds dataSourceImpl) GetMfaSessionFromToken(ctx context.Context, session session.Session) (uuid.UUID, error) {

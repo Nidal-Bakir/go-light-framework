@@ -31,9 +31,11 @@ func init() {
 func IsProd() bool {
 	return isProd
 }
+
 func IsStag() bool {
 	return isStag
 }
+
 func IsLocal() bool {
 	return isLocal
 }

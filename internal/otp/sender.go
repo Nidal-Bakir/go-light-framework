@@ -31,7 +31,7 @@ func (o Sender) SendOTP(ctx context.Context, option Options) (err error) {
 
 	option.Purpose.FoldOr(
 		OtpPurposeFoldActions{
-			//TODO: implement each case
+			// TODO: implement each case
 		},
 		func() {
 			content = option.Otp

@@ -122,16 +122,15 @@ func (repo repositoryImpl) GetUserById(ctx context.Context, id int) (User, error
 	}
 
 	user := User{
-		ID:           dbUser.ID,
-		Username:     dbUser.Username,
-		ProfileImage: dbUser.ProfileImage,
-		FirstName:    dbUser.FirstName,
-		MiddleName:   dbUser.MiddleName,
-		LastName:     dbUser.LastName,
-		CreatedAt:    dbUser.CreatedAt,
-		UpdatedAt:    dbUser.UpdatedAt,
-		BlockedAt:    dbUser.BlockedAt,
-		RoleName:     dbUser.RoleName,
+		ID:            dbUser.ID,
+		Username:      dbUser.Username,
+		ProfileImage:  dbUser.ProfileImage,
+		FirstName:     dbUser.FirstName,
+		LastName:      dbUser.LastName,
+		CreatedAt:     dbUser.CreatedAt,
+		InfoUpdatedAt: dbUser.InfoUpdatedAt,
+		BlockedAt:     dbUser.BlockedAt,
+		RoleName:      dbUser.RoleName,
 	}
 	return user, nil
 }
@@ -269,7 +268,8 @@ func (repo repositoryImpl) sendOtp(
 			Localizer:   localizer,
 			Purpose:     otpPurpose,
 			Otp:         otpToSend,
-		})
+		},
+	)
 	if err != nil {
 		zlog.Err(err).Msgf("error while sending the otp")
 	}
@@ -364,7 +364,7 @@ func (repo repositoryImpl) storPasswordUser(ctx context.Context, tUser *TempPass
 	return user, nil
 }
 
-func (repo repositoryImpl) updateDbUserUsername(ctx context.Context, dbUser *database_queries.User) {
+func (repo repositoryImpl) updateDbUserUsername(ctx context.Context, dbUser *database_queries.UserWithInfo) {
 	zlog := zerolog.Ctx(ctx)
 	username := usernaemgen.NewUsernameGen().Generate(int64(dbUser.ID))
 	err := repo.dataSource.UpdateUsernameForUser(ctx, dbUser.ID, username)
@@ -378,7 +378,7 @@ func (repo repositoryImpl) updateDbUserUsername(ctx context.Context, dbUser *dat
 }
 
 func generatePassworUserArgsForCreateUser(user *TempPasswordUser, passwordHasher password_hasher.PasswordHasher) (CreatePasswordUserArgs, error) {
-	hashedPass, passSalt, err := passwordHasher.GeneratePasswordHashWithSalt((user.Password))
+	hashedPass, passSalt, err := passwordHasher.GeneratePasswordHashWithSalt(user.Password)
 	if err != nil {
 		return CreatePasswordUserArgs{}, nil
 	}
@@ -511,7 +511,6 @@ func (repo repositoryImpl) PasswordLogin(
 		Username:     userWithLoginIdentity.UserUsername,
 		ProfileImage: userWithLoginIdentity.UserProfileImage,
 		FirstName:    userWithLoginIdentity.UserFirstName,
-		MiddleName:   userWithLoginIdentity.UserMiddleName,
 		LastName:     userWithLoginIdentity.UserLastName,
 		RoleName:     userWithLoginIdentity.UserRoleName,
 		BlockedAt:    userWithLoginIdentity.UserBlockedAt,
@@ -563,7 +562,6 @@ func (repo repositoryImpl) changePasswordForAllPasswordLoginIdentities(ctx conte
 	zlog := zerolog.Ctx(ctx)
 
 	loginOptions, err := repo.dataSource.GetAllPasswordLoginIdentitiesForUser(ctx, int32(userID))
-
 	if err != nil {
 		zlog.Err(err).Msg("error while getting all the login options for a user")
 		return err
@@ -1081,7 +1079,6 @@ func (repo repositoryImpl) VerifyPendingOtpMfa(
 		Username:     userAndSession.UserUsername,
 		ProfileImage: userAndSession.UserProfileImage,
 		FirstName:    userAndSession.UserFirstName,
-		MiddleName:   userAndSession.UserMiddleName,
 		LastName:     userAndSession.UserLastName,
 		RoleName:     userAndSession.UserRoleName,
 		BlockedAt:    userAndSession.UserBlockedAt,

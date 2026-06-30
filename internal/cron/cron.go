@@ -51,12 +51,15 @@ type logger struct {
 func (l logger) Debug(msg string, args ...any) {
 	l.l.Debug().Msgf(msg, args...)
 }
+
 func (l logger) Error(msg string, args ...any) {
 	l.l.Error().Msgf(msg, args...)
 }
+
 func (l logger) Info(msg string, args ...any) {
 	l.l.Info().Msgf(msg, args...)
 }
+
 func (l logger) Warn(msg string, args ...any) {
 	l.l.Warn().Msgf(msg, args...)
 }

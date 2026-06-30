@@ -48,7 +48,7 @@ func NewLogger(shouldOutputToConcole bool) *zerolog.Logger {
 		file, err := os.OpenFile(
 			logFileFullPath,
 			os.O_APPEND|os.O_CREATE|os.O_WRONLY,
-			0664,
+			0o664,
 		)
 		if err != nil {
 			os.Stderr.Write(fmt.Appendf(nil, "Error opening the log file for write, Error: %v", err))
@@ -70,7 +70,6 @@ func NewLogger(shouldOutputToConcole bool) *zerolog.Logger {
 
 // for concole formating
 func formatPrepare(m map[string]interface{}) error {
-
 	if v, ok := m["code"]; ok {
 		if strNum, ok := v.(json.Number); ok {
 			num, err := strconv.Atoi(strNum.String())

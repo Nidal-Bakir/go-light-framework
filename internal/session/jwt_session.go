@@ -31,7 +31,6 @@ func (s jwtSession) GetAttr(ctx context.Context, key string) (string, error) {
 		return c, nil
 	}
 	return s.store.GetAttr(ctx, s.String(), key)
-
 }
 
 func (s jwtSession) RemoveAttr(ctx context.Context, key string) error {

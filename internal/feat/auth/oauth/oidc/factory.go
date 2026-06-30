@@ -34,7 +34,6 @@ func (f OidcFunc) ExecEncrypted(ctx context.Context, code, codeVerifier, oidcTok
 		data.OauthRefreshToken.String = enc
 	}
 	return data, err
-
 }
 
 func NewOidc(provider oauth.OauthProvider) OidcFunc {
