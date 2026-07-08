@@ -4,6 +4,9 @@ A batteries-included Go backend framework with PostgreSQL, Redis, Docker Compose
 
 This project demonstrates a complete production-grade backend architecture with authentication, OAuth, rate limiting, validation, caching, and a fully modular internal design.
 
+> [!CAUTION]
+> # Deprecated in favor of the new framework [go-hypercube](https://github.com/go-hypercube/go-hypercube)
+
 ---
 
 ## ✨ Features
